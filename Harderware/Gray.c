@@ -18,6 +18,7 @@
 #define Forward_LookingLine_Max   30        //前瞻行的最大值
 #define Forward_LookingLine_Min   50        //前瞻行的最小值
 #define Frame_Mind     (GRAY_W >> 1)		//设定的中心
+#define Confirm_Delay    3                  //确认角点存在的延迟
 static const uint8 Weight[9] = {60, 70, 80, 90, 100, 90, 80, 70,  60};           //前瞻区域的权重
 
 /*=================赛道半宽================*/
@@ -33,6 +34,9 @@ static const int8 LY_Plus[8] = { 0, -1, -1, -1,  0,  1,  1,  1};
 //右侧方向偏移
 static const int8 RX_Plus[8] = {-1, -1,  0,  1,  1,  1,  0, -1};
 static const int8 RY_Plus[8] = { 0, -1, -1, -1,  0,  1,  1,  1};
+
+//用于记录角点存在的帧数
+static uint8 Key_PointExisi_Flag = 0;
 
 //用于储存找到的左,右边线
 int16 L_Edge[GRAY_H];
@@ -642,8 +646,15 @@ void Find_MidLine(void)
 	int16 i = 0;
 	//找中线
 	memset(Mid_Line , -1 , sizeof(Mid_Line));						//初始化为-1
+	if(Distinguish_Circle_Cross(AY,BY,AB_Exist,OnlyA_or_B) == 2)    //判断为十字
+	{
+		Cross_Statemachine(AX, AY, BX, BY, AB_Exist,OnlyA_or_B);
+	}
+	else
+	{
+		//圆环状态机
+	}
 	
-	Cross_Statemachine(AX, AY, BX, BY, AB_Exist,OnlyA_or_B);
 
 	for(i = GRAY_H - 1 ; i >= 0 ; i --)
 	{
@@ -779,6 +790,96 @@ int16 Find_Error(int16 Mid_Line[], int16 L_Edge[], int16 R_Edge[])
 	return Error_Out;
 }
 
+
+
+/*
+传入参数 1—4 A,B点的坐标
+		 5：A,B点是否同时存在
+		 6：A,B点哪个点单独出现 （1.A点    2.B点）
+
+返回参数 0. 无意义
+		1，判断为圆环
+		2. 判断为十字
+*/
+uint8 Distinguish_Circle_Cross(uint16 A_Y, uint16 B_Y, uint8 AB_StateFlag, uint8 Only_AorB_StateFlag)
+{
+	uint8 i;
+	uint8 Quallied_Num;          //左侧/右侧边界有值的行数
+
+	Quallied_Num = 0;
+
+	if(AB_StateFlag == 1)  //A,B点同时存在
+	{
+		//加延时确认
+		Key_PointExisi_Flag ++;
+		if(Key_PointExisi_Flag >= Confirm_Delay)
+		{
+			Key_PointExisi_Flag = 0;
+			return 2;
+		}
+	}
+	else
+	{
+		Key_PointExisi_Flag = 0;
+	}
+
+
+	switch (Only_AorB_StateFlag)
+	{
+		case 1:
+			Key_PointExisi_Flag ++;
+			if(Key_PointExisi_Flag >= Confirm_Delay)
+			{
+				Key_PointExisi_Flag = 0;
+				for(i = A_Y; i >= (A_Y - 10); i --)
+				{
+					if(R_Edge[i] >= 0)
+					{
+						Quallied_Num ++;
+					}
+				}
+				if(Quallied_Num >= 6)            //右侧边界连续，是圆环
+				{
+					return 1;
+				}
+				else
+				{
+					return 2;
+				}
+			}
+		break;
+	
+		case 2:
+			//加延时确认
+			Key_PointExisi_Flag ++;
+			if(Key_PointExisi_Flag >= Confirm_Delay)
+			{
+				Key_PointExisi_Flag = 0;
+				for(i = B_Y; i >= (B_Y - 10); i --)
+				{
+					if(L_Edge[i] >= 0)
+					{
+						Quallied_Num ++;
+					}
+				}
+				if(Quallied_Num >= 6)
+				{
+					return 1;
+				}
+				else
+				{
+					return 2;
+				}
+			}
+		break;
+	
+		default:
+		break;
+	}
+
+
+	return 0;
+}
 /*
 说明
 可优化的点 1.在丢线之后重新寻找的逻辑里面，可以不用从中线开始找，从最后一个找到点的位置，同时向左右两边找即可

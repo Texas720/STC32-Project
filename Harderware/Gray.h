@@ -37,5 +37,6 @@ void Find_Edge(void);  // 直接对全局 Image1（下采样后二值化图像�
 void Find_KeyPoint(int16 L_Edge[GRAY_H] , int16 R_Edge[GRAY_H]);
 void Find_MidLine(void);
 int16 Find_Error(int16 Mid_Line[], int16 L_Edge[], int16 R_Edge[]);
+uint8 Distinguish_Circle_Cross(uint16 A_Y, uint16 B_Y, uint8 AB_StateFlag, uint8 Only_AorB_StateFlag);
 
 #endif

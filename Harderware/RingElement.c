@@ -17,6 +17,7 @@
 #define WhiteBlock_Num                      50      //左右两侧的白色像素个数的最小值   
 #define Real_AorB_LoseCon                   2       //符合上方条件的最小行数  
 #define CheckAorBLose_Confirm_Cols          5       //N列满足条件，则判断为只是弯道而非十字
+#define Ring_Top_Gap                        2       //找到白色区域上边界后，再向上偏移的行数，用于定位远端拐点
 
 static uint8 Ring_State = No_Detecte_Ring;
 static uint8 Choose_LeftorRight = 0;                //选择方向（1. 左圆环      2.右圆环）
@@ -298,7 +299,7 @@ uint8 Confirm_Ring_No_KeyPoint(uint8 Ring_Side)
     uint8 i;
     uint8 Lose_Count = 0;           //有断裂的次数   
     uint8 Reply_Count = 0;          //检测为孤立段的次数         
-    uint8 Step;                 //检测阶段1:检测第一段断裂    2：检测孤立段   
+    uint8 Step = 0;                 //检测阶段1:检测第一段断裂    2：检测孤立段   
 
     if(Ring_Side == 1)          //左圆环
     {
@@ -367,6 +368,134 @@ uint8 Confirm_Ring_No_KeyPoint(uint8 Ring_Side)
     //检测为非圆环
     return 0;
 }
+
+
+/*
+C点拉线入环的响应
+输入参数 Direction 1:左圆环  2：右侧圆环
+*/
+void RingEntry_Patchline_Action(uint8 Direction)
+{ 
+    uint8 i;
+    uint8 j;
+    int16 LTemp_X;          //用于标定左圆环外凸点
+    int16 RTemp_X;          //用于标定右圆环外凸点
+    uint16 Start_XL;        //找到的左圆环外凸点
+    uint16 Start_YL;
+    uint16 Start_XR;        //找到的右圆环外凸点
+    uint16 Start_YR;
+
+
+    uint16 C_PointX = 0;        //拉线起始点坐标
+    uint16 C_PointY = 0;  
+    uint8  C_Found = 0;
+    int16  Base_X = 0;          //补线锚点坐标
+    int16  Base_Y = 0;          //补线锚点坐标
+    int16  Lx_Plus = 0;
+    int16  Rx_Plus = 0;
+    int16  KL = 0;              //右圆环补线斜率
+    int16  KR = 0;              //左圆环补线斜率
+    uint8  C_SlopeValid  = 0;                     //C侧斜率是否成功算出过
+
+
+    LTemp_X = 0;
+    RTemp_X = 94;
+
+    if(Direction == 1)//左侧圆环
+    {
+
+    }
+    else if(Direction == 2) //右侧圆环
+    {
+        for(i = (GRAY_H - 1); i > Max_Detecte_Length; i --)
+        {
+            if(R_Edge[i] < RTemp_X)
+            {
+                RTemp_X = R_Edge[i];
+                Start_YR = i;
+            }
+        }
+        Start_XR = RTemp_X;
+
+        //向上找边界点
+        if(Start_XR > 3 && Start_XR < GRAY_W)  
+        {
+            for(j = Start_XR; j > (Mid_Linex - 10); j --)
+            {
+                C_PointY = 0;
+
+                for(i = (GRAY_H - 1); i > 0; i --)
+                {
+                    if(Image1[j][i] == WHITE && Image1[j][i - 1] == BLACK && Image1[j][i - 2] == BLACK)
+                    {
+                        C_PointY = i;
+                        break;
+                    }
+                }
+
+                if(C_PointY <= Cross_Top_Gap + 1)
+                {
+                    continue;
+                }
+
+                C_PointY = C_PointY - Cross_Top_Gap;    
+
+                if(Image1[j][C_PointY] == BLACK
+                    && Image1[j - 1][C_PointY] == WHITE
+                    && Image1[j - 2][C_PointY] == WHITE)
+                {
+                    C_PointX = j;
+                    C_Found = 1;
+                    break;
+                }
+            }
+        }
+
+        //补线
+        if(C_Found == 1)
+        {
+            
+            if(L_Edge[Start_YR] >= 0)                    //假如边界基准行，存在L_Edge[Key_Row] > 0,即存在有效值
+            {
+                Base_X = L_Edge[Start_YR];
+                Base_Y = Start_YR;
+            }
+            else if(L_Edge[Start_YR] < 0 )             //基准行不存在,使用画面左下点
+            {
+                Base_X = 3;
+                Base_Y = 59;
+            }
+            
+            if(Base_Y >C_PointY)
+            {
+                KL = (int16)(((int32)((int16)(C_PointX + 1) - Base_X) * 100) / (Base_Y - (int16)C_PointY));
+                C_SlopeValid = 1;                                       //计算出正确斜率，可以缓存
+            }
+        }
+        
+        for (j = C_PointY; j < (GRAY_H - 1); j ++)
+        {
+            if(C_Found == 1 && C_SlopeValid == 1)
+            {
+                Lx_Plus =  (int16)((C_PointX + 1) - (((int32)KL * ((int32)j - (int32)C_PointY)) / 100));
+                if(Lx_Plus < 1)
+                {
+                    Lx_Plus = 1;
+                }
+                if(Lx_Plus > GRAY_W - 3)
+                {
+                    Lx_Plus = GRAY_W - 3;
+                }
+                L_Edge[j] = Lx_Plus;
+                tft180_draw_point(L_Edge[j], j, RGB565_BLUE);
+            }
+        }
+    }
+}
+
+
+
+/*********************************************************************************************************************************** */
 
 
 
