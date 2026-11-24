@@ -1,0 +1,95 @@
+C251 COMPILER V5.60.0,  Servo                                                              21/11/26  17:07:47  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE Servo
+OBJECT MODULE PLACED IN .\out_file\Servo.obj
+COMPILER INVOKED BY: E:\Keil5\C251\BIN\C251.EXE ..\..\Harderware\Servo.c LARGE FLOAT64 ROM(HUGE) WARNINGLEVEL(3) OPTIMIZ
+                    -E(SIZE) BROWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\
+                    -zf_driver;..\user;..\code;..\..\libraries\zf_components\stc32g_usb_lib;..\..\libraries\zf_components\seekfree_assistant;
+                    -..\..\Harderware) DEBUG PRINT(.\out_file\Servo.lst) TABS(2) OBJECT(.\out_file\Servo.obj) 
+
+stmt  level    source
+
+    1          #include "zf_common_headfile.h"
+    2          #include "Element.h"
+    3          #define Servo_PWMStream   PWME_CH1P_PA0
+    4          #define Servo_Mid   780
+    5          #define Servo_Max   870                         //最大脉宽（最左侧）
+    6          #define Servo_Min   680                         //最小脉宽（最右侧）
+    7          
+    8          /*---------------- 转向PD参数 ----------------*/
+    9          #define SERVO_KP        0.600f                       //比例系数（按新行程 190/1040≈0.18 等比
+             -缩放）
+   10          #define SERVO_KP2       0.0004f                     //平方项系数：小偏差几乎不起作用，大
+             -偏差增益非线性放大
+   11          #define SERVO_KD        0.10f                       //微分系数(经3:7一阶滤波，抗图像噪声)
+   12          #define SERVO_OUT_MAX   (Servo_Max - Servo_Mid)     //输出限幅上限 +90（左）
+   13          #define SERVO_OUT_MIN   (Servo_Min - Servo_Mid)     //输出限幅下限 -100（右）
+   14          
+   15          void Servo_Init(void)
+   16          {
+   17   1          pwm_init(Servo_PWMStream,50,Servo_Mid);
+   18   1      }
+   19          
+   20          void Servo_SetAngle(uint16 PWM)
+   21          {
+   22   1          //出口限幅保护
+   23   1          if(PWM > Servo_Max) PWM = Servo_Max;
+   24   1          if(PWM < Servo_Min) PWM = Servo_Min;
+   25   1          pwm_set_duty(Servo_PWMStream,PWM);
+   26   1      }
+   27          
+   28          
+   29          int16 Servo_pidTurn(int16 Error)
+   30          {
+   31   1          static int16 error_last = 0;    //上一帧偏差
+   32   1          static float out_d = 0;         //滤波后的微分项
+   33   1          int16 error;
+   34   1          float f;                        //error*|error|，保留符号
+   35   1          float out;
+   36   1      
+   37   1          error = -Error;                 //和原增量式保持同方向
+   38   1      
+   39   1          f = (float)error * (error >= 0 ? error : -error);                 //e*|e|，C251的int是16位，先�
+             -��float防溢出
+   40   1          out_d = (3 * SERVO_KD * (error - error_last) + 7 * out_d) / 10;   //3:7一阶滤波：平滑单帧误
+             -差跳变，避免反向脉冲
+   41   1          error_last = error;
+   42   1      
+   43   1          out = SERVO_KP * error + SERVO_KP2 * f + out_d;
+   44   1      
+   45   1          //输出限幅
+   46   1          if(out > SERVO_OUT_MAX) out = SERVO_OUT_MAX;
+   47   1          if(out < SERVO_OUT_MIN) out = SERVO_OUT_MIN;
+   48   1      
+   49   1          Servo_SetAngle((uint16)(Servo_Mid + (int16)out));   //中值叠加，Servo_SetAngle内还有一层行
+             -程保护
+   50   1      
+   51   1          return (int16)out;
+C251 COMPILER V5.60.0,  Servo                                                              21/11/26  17:07:47  PAGE 2   
+
+   52   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =    ------     ------
+  ecode size           =       299     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =         6     ------
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =        16     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

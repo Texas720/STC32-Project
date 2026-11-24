@@ -1,0 +1,85 @@
+C251 COMPILER V5.60.0,  Encoder                                                            21/11/26  17:07:47  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE Encoder
+OBJECT MODULE PLACED IN .\out_file\Encoder.obj
+COMPILER INVOKED BY: E:\Keil5\C251\BIN\C251.EXE ..\..\Harderware\Encoder.c LARGE FLOAT64 ROM(HUGE) WARNINGLEVEL(3) OPTIM
+                    -IZE(SIZE) BROWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\librarie
+                    -s\zf_driver;..\user;..\code;..\..\libraries\zf_components\stc32g_usb_lib;..\..\libraries\zf_components\seekfree_assistan
+                    -t;..\..\Harderware) DEBUG PRINT(.\out_file\Encoder.lst) TABS(2) OBJECT(.\out_file\Encoder.obj) 
+
+stmt  level    source
+
+    1          #include "zf_common_headfile.h"
+    2          
+    3          
+    4          //轮
+    5          #define ENCODER_DIR_2                   (PWMC_ENCODER)              // 带方向编码器对应使用的�
+             -�码器接口
+    6          #define ENCODER_DIR_PULSE_2           (PWMC_ENCODER_CH1P_P40)     // PULSE 对应的引脚
+    7          #define ENCODER_DIR_DIR_2             (PWMC_ENCODER_CH2P_P42)     // DIR 对应的引脚
+    8          
+    9          
+   10          //右轮
+   11          #define ENCODER_DIR_1                   (PWMA_ENCODER)              // 带方向编码器对应使用的�
+             -�码器接口 
+   12          #define ENCODER_DIR_PULSE_1             (PWMA_ENCODER_CH1P_P60)     // PULSE 对应的引脚
+   13          #define ENCODER_DIR_DIR_1               (PWMA_ENCODER_CH2P_P62)     // DIR 对应的引脚
+   14          
+   15          
+   16          void Encoder_Init(void)
+   17          {
+   18   1          encoder_dir_init(ENCODER_DIR_1,ENCODER_DIR_PULSE_1,ENCODER_DIR_DIR_1);         //编码器本身有�
+             -�根信号线输出方向，位置改变的时候，该信号线的电平改变
+   19   1          encoder_clear_count(ENCODER_DIR_1);                                            //清除计数器的�
+             -�
+   20   1          encoder_dir_init(ENCODER_DIR_2,ENCODER_DIR_PULSE_2,ENCODER_DIR_DIR_2);
+   21   1          encoder_clear_count(ENCODER_DIR_2);
+   22   1      }
+   23          
+   24          
+   25          //编码器旋转一圈输出1024个脉冲信号
+   26          int16 Encoder_GetL(void)
+   27          {
+   28   1          int16 Temp = 0;
+   29   1          Temp = -(encoder_get_count(ENCODER_DIR_2)); //本车接线下前进时原始计数为负，取反使�
+             -��进为正
+   30   1          encoder_clear_count(ENCODER_DIR_2);
+   31   1          return Temp;
+   32   1      }
+   33          
+   34          int16 Encoder_GetR(void)
+   35          {
+   36   1          int16 Temp = 0;
+   37   1          Temp = -(encoder_get_count(ENCODER_DIR_1)); //同上，保持两轮方向一致
+   38   1          encoder_clear_count(ENCODER_DIR_1);
+   39   1          return Temp;
+   40   1      }
+*** WARNING C183 IN LINE 28 OF ..\..\Harderware\Encoder.c: dead assignment eliminated
+*** WARNING C183 IN LINE 36 OF ..\..\Harderware\Encoder.c: dead assignment eliminated
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =    ------     ------
+  ecode size           =        94     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =    ------     ------
+C251 COMPILER V5.60.0,  Encoder                                                            21/11/26  17:07:47  PAGE 2   
+
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =    ------     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  2 WARNING(S),  0 ERROR(S)

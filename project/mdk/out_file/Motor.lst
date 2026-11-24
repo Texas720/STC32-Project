@@ -1,0 +1,99 @@
+C251 COMPILER V5.60.0,  Motor                                                              21/11/26  17:07:47  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE Motor
+OBJECT MODULE PLACED IN .\out_file\Motor.obj
+COMPILER INVOKED BY: E:\Keil5\C251\BIN\C251.EXE ..\..\Harderware\Motor.c LARGE FLOAT64 ROM(HUGE) WARNINGLEVEL(3) OPTIMIZ
+                    -E(SIZE) BROWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\
+                    -zf_driver;..\user;..\code;..\..\libraries\zf_components\stc32g_usb_lib;..\..\libraries\zf_components\seekfree_assistant;
+                    -..\..\Harderware) DEBUG PRINT(.\out_file\Motor.lst) TABS(2) OBJECT(.\out_file\Motor.obj) 
+
+stmt  level    source
+
+    1          #include "zf_common_headfile.h"
+    2          #include "Encoder.h"
+    3          
+    4          #define L_MotorIO IO_P76
+    5          #define L_MotorPWM  PWMB_CH4_P77
+    6          #define R_MotorIO IO_P74
+    7          #define R_MotorPWM  PWMB_CH2_P75
+    8          #define Max_OutPutPWM    9000.0
+    9          #define Speed_Kp   2.00
+   10          #define Speed_Ki   1.00
+   11          
+   12          void Motor_Init(void)
+   13          {
+   14   1          gpio_init(L_MotorIO,GPO,1,GPO_PUSH_PULL);
+   15   1          pwm_init(L_MotorPWM,17000,0);
+   16   1          gpio_init(R_MotorIO,GPO,0,GPO_PUSH_PULL);
+   17   1          pwm_init(R_MotorPWM,17000,0);
+   18   1      }
+   19          
+   20          void Motor_SetSameSpeed(int16 pwm)    
+   21          {
+   22   1        if(pwm < 0)     pwm = 0;      //负占空比无意义，且传给 uint32 形参会回绕成满速
+   23   1        if(pwm > 10000) pwm = 10000;
+   24   1          pwm_set_duty(L_MotorPWM,pwm);
+   25   1          pwm_set_duty(R_MotorPWM,pwm);
+   26   1      }
+   27          
+   28          int16 Motor_PIControl(int16 aimspeed, int16 *l_speed, int16 *r_speed)            //输入的是目标pwm�
+             -��值，这个值设定为目标占空比的20倍数；速度通过指针带出，避免编码器被重复读取清零
+   29          {
+   30   1        static int16 SpeedError1 = 0; //上一次的误差，增量式 PI 必须跨调用保持
+   31   1        static int16 SpeedError0 = 0; //本次误差
+   32   1        static float Result_Pwm  = 0; //输出累积量，必须跨调用保持
+   33   1          int16 SpeedTerget;
+   34   1          int16 SpeedActual;
+   35   1          int16 AverageSpeed;
+   36   1      
+   37   1      
+   38   1          *l_speed = Encoder_GetL();
+   39   1        *r_speed = Encoder_GetR();
+   40   1          SpeedTerget = aimspeed;
+   41   1        AverageSpeed = (*l_speed + *r_speed) >> 1;
+   42   1      
+   43   1        SpeedActual = AverageSpeed ;//实际值
+   44   1        SpeedError1 = SpeedError0 ;
+   45   1        SpeedError0 = SpeedTerget - SpeedActual ;
+   46   1      
+   47   1        Result_Pwm += Speed_Kp * (SpeedError0 - SpeedError1 ) + Speed_Ki * SpeedError0 ;//输出平均PWM
+   48   1      
+   49   1        if(Result_Pwm >= Max_OutPutPWM)
+   50   1        {
+   51   2          Result_Pwm = Max_OutPutPWM;
+   52   2        }
+   53   1        if(Result_Pwm <= 0)       //下限钳位，防止负值转成巨大无符号占空比
+   54   1        {
+   55   2          Result_Pwm = 0;
+C251 COMPILER V5.60.0,  Motor                                                              21/11/26  17:07:47  PAGE 2   
+
+   56   2        }
+   57   1      
+   58   1          Motor_SetSameSpeed((int16) Result_Pwm);
+   59   1        return (int16)Result_Pwm;
+   60   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =    ------     ------
+  ecode size           =       402     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =         8          6
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =        23     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

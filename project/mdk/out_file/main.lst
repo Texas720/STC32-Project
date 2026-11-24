@@ -1,0 +1,250 @@
+C251 COMPILER V5.60.0,  main                                                               22/11/26  17:26:53  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE main
+OBJECT MODULE PLACED IN .\out_file\main.obj
+COMPILER INVOKED BY: E:\Keil5\C251\BIN\C251.EXE ..\user\main.c LARGE FLOAT64 ROM(HUGE) WARNINGLEVEL(3) OPTIMIZE(SIZE) BR
+                    -OWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;
+                    -..\user;..\code;..\..\libraries\zf_components\stc32g_usb_lib;..\..\libraries\zf_components\seekfree_assistant;..\..\Hard
+                    -erware) DEBUG PRINT(.\out_file\main.lst) TABS(2) OBJECT(.\out_file\main.obj) 
+
+stmt  level    source
+
+    1          
+    2          ////////////////////////////////////////////////////////////////////
+    3          //每日一拜，好过省赛                            每日多拜，稳赢国赛//
+    4          //                          _ooOoo_                               //
+    5          //                         o8888888o                              //
+    6          //                         88" . "88                              //
+    7          //                         (| ^_^ |)                              //
+    8          //                         O\  =  /O                              //
+    9          //                      ____/`---'\____                           //
+   10          //                    .'  \\|     |//  `.                         //
+   11          //                   /  \\|||  :  |||//  \                        //
+   12          //                  /  _||||| -:- |||||-  \                       //
+   13          //                  |   | \\\  -  /// |   |                       //
+   14          //                  | \_|  ''\---/''  |   |                       //
+   15          //                  \  .-\__  `-`  ___/-. /                       //
+   16          //                ___`. .'  /--.--\  `. . ___                     //
+   17          //              ."" '<  `.___\_<|>_/___.'  >'"".                  //
+   18          //            | | :  `- \`.;`\ _ /`;.`/ - ` : | |                 //
+   19          //            \  \ `-.   \_ __\ /__ _/   .-` /  /                 //
+   20          //      ========`-.____`-.___\_____/___.-`____.-'========         //
+   21          //                           `=---='                              //
+   22          //      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^        //
+   23          //             佛祖保佑     永无BUG      车魂大悦                  //
+   24          ////////////////////////////////////////////////////////////////////
+   25          
+   26          
+   27          
+   28          
+   29          /********************************************************************************************************
+             -*************
+   30          * STC32G144K Opensourec Library 即（STC32G144K 开源库）是一个基于官方 SDK 接口的第三方
+             -开源库
+   31          * Copyright (c) 2025 SEEKFREE 逐飞科技
+   32          *
+   33          * 本文件是STC32G144K开源库的一部分
+   34          *
+   35          * STC32G144K 开源库 是免费软件
+   36          * 您可以根据自由软件基金会发布的 GPL（GNU General Public License，即 GNU通用公共许
+             -可证）的条款
+   37          * 即 GPL 的第3版（即 GPL3.0）或（您选择的）任何后来的版本，重新发布和/或修�
+             -�它
+   38          *
+   39          * 本开源库的发布是希望它能发挥作用，但并未对其作任何的保证
+   40          * 甚至没有隐含的适销性或适合特定用途的保证
+   41          * 更多细节请参见 GPL
+   42          *
+   43          * 您应该在收到本开源库的同时收到一份 GPL 的副本
+   44          * 如果没有，请参阅<https://www.gnu.org/licenses/>
+   45          *
+   46          * 额外注明：
+   47          * 本开源库使用 GPL3.0 开源许可证协议 以上许可申明为译文版本
+   48          * 许可申明英文版在 libraries/doc 文件夹下的 GPL3_permission_statement.txt 文件中
+   49          * 许可证副本在 libraries 文件夹下 即该文件夹下的 LICENSE 文件
+   50          * 欢迎各位使用并传播本程序 但修改内容时必须保留逐飞科技的版权声明（即本
+             -声明）
+   51          *
+C251 COMPILER V5.60.0,  main                                                               22/11/26  17:26:53  PAGE 2   
+
+   52          * 文件名称          
+   53          * 公司名称          成都逐飞科技有限公司
+   54          * 版本信息          查看 libraries/doc 文件夹内 version 文件 版本说明
+   55          * 开发环境          MDK FOR C251
+   56          * 适用平台          STC32G144K
+   57          * 店铺链接          https://seekfree.taobao.com/
+   58          *
+   59          * 修改记录
+   60          * 日期              作者           备注
+   61          * 2025-11-20        大W            first version
+   62          *********************************************************************************************************
+             -***********/
+   63          #include "zf_common_headfile.h"
+   64          #include "Gray.h"
+   65          #include "Servo.h"
+   66          #include "Key.h"
+   67          #include "pit.h"
+   68          #include "Motor.h"
+   69          #include "Encoder.h"
+   70          #include "Element.h"
+   71          
+   72          #define LED1                    (IO_P52 )
+   73          
+   74          #define WIFI_SSID_TEST          "TP-LINK_5FFF"
+   75          #define WIFI_PASSWORD_TEST      NULL
+   76          #define WHITE  0xFF
+   77          #define BLACK  0x00
+   78          #define interval_OTSU           4
+   79          int Output;
+   80          
+   81          int16 kp,kd;
+   82          
+   83          int16 yaw=0;
+   84          int16 acc_y=0;
+   85          int16 acc_y_filt;
+   86          
+   87          //找到的边界
+   88          extern int16 L_Edge[GRAY_H];
+   89          extern int16 R_Edge[GRAY_H];
+   90          // extern uint8 Servo_ReturnNormal;                   //[已注释] 舵机回正标志
+   91          extern int16 Temp_Error;
+   92          
+   93          
+   94          extern uint16 Angle_Set;
+   95          //找到的最佳阈值
+   96          uint8 Final_Gray;
+   97          int16 Out = 0;
+   98          
+   99          void tft180_showcolorTest(void)
+  100          {
+  101   1        uint8 i = 0;
+  102   1        uint16 color[3];
+  103   1        color[0] = RGB565_RED;
+  104   1        color[1] = RGB565_PINK;
+  105   1        color[2] = RGB565_BLUE;
+  106   1        for(i = 0; i < 3; i ++)
+  107   1        {
+  108   2          tft180_clear(color[i]);
+  109   2          tft180_show_string(60,60,"Texas720");
+  110   2          system_delay_ms(500);
+  111   2        } 
+  112   1      }
+  113          
+  114          
+  115          void main(void)
+  116          {
+C251 COMPILER V5.60.0,  main                                                               22/11/26  17:26:53  PAGE 3   
+
+  117   1          uint8 i;                        
+  118   1          uint8 j;
+  119   1          uint8 K = 0;
+  120   1          uint8 FPS = 0; 
+  121   1          uint8 Flag1 ;
+  122   1          clock_init(SYSTEM_CLOCK_96M);         // 时钟配置及系统初始化<务必保留>
+  123   1          debug_init();                           // 调试串口信息初始化
+  124   1          mt9v03x_init();
+  125   1          mt9v03x_set_exposure_time(100);
+  126   1          tft180_init();
+  127   1          Servo_Init();
+  128   1          Key_Init();
+  129   1          pit_ms_init(TIM1_PIT, 3, pit_tim0);
+  130   1          pit_ms_init(TIM2_PIT, 10, pit_tim1);
+  131   1          pit_ms_init(TIM3_PIT, 1000, pit_tim2);
+  132   1          Motor_Init();
+  133   1          Encoder_Init();
+  134   1          
+  135   1      
+  136   1        while (1)
+  137   1        {
+  138   2          Flag1 = Tick;                       // 读 1s 节拍标志
+  139   2          // tft180_show_string(20,62,"LS");
+  140   2          // tft180_show_string(20,92,"RS");
+  141   2          // tft180_show_int16(40, 62, L_Speed);
+  142   2          // tft180_show_int16(40, 92, R_Speed);
+  143   2          
+  144   2          if(Flag1 == 1)
+  145   2          {
+  146   3            Tick = 0;
+  147   3            tft180_show_uint8(60,130,FPS);    //1s 到，显示并清零帧计数
+  148   3            FPS = 0;
+  149   3      
+  150   3          }
+  151   2      
+  152   2          if(mt9v03x_finish_flag == 1)
+  153   2          {
+  154   3            K ++;
+  155   3            mt9v03x_finish_flag = 0;                 // 清除帧完成标志，等待下一帧
+  156   3            if(K == 2)
+  157   3            {
+  158   4              K = 0;
+  159   4              Final_Gray = Normal_Gray(mt9v03x_image);
+  160   4            }
+  161   3            
+  162   3            //灰度图二值化
+  163   3            for(i = 0 ; i < GRAY_H; i ++)       //行数（下采样后）
+  164   3            {
+  165   4              for(j = 0; j < GRAY_W; j ++)      //列数（下采样后）
+  166   4              {
+  167   5                if(mt9v03x_image[i * 2][j * 2] > Final_Gray)
+  168   5                {
+  169   6                  Image1[j][i] = WHITE;     // Image1 是 [列][行]，与 Find_Edge 的用法保持一致
+  170   6                }
+  171   5                else
+  172   5                {
+  173   6                  Image1[j][i] = BLACK;
+  174   6                }
+  175   5              }
+  176   4      
+  177   4            }
+  178   3            // 直接显示原灰度图并按阈值二值，避免把列优先的 Image1 当行优先数组读取
+  179   3            tft180_show_gray_image(0, 0, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, MT9V03X_W / 2, MT9V03X_H / 2, Fin
+             -al_Gray);
+  180   3            Find_Edge();
+  181   3            Find_KeyPoint(L_Edge, R_Edge);
+C251 COMPILER V5.60.0,  main                                                               22/11/26  17:26:53  PAGE 4   
+
+  182   3            Find_MidLine();
+  183   3            //紫色前瞻线在主循环画（Find_Error 在 3ms 中断里，画屏会和这里的灰度图传输
+             -冲突）
+  184   3            for(j = 0; j < GRAY_W; j ++)
+  185   3            {
+  186   4              tft180_draw_point(j, Forward_LookingLine_Out, RGB565_PURPLE);
+  187   4            }
+  188   3            FPS ++ ;
+  189   3          }
+  190   2      
+  191   2      
+  192   2          //   tft180_show_int16(0,90,Turn_Result);
+  193   2          //   tft180_show_uint8(0,130,RE_State);
+  194   2            
+  195   2            
+  196   2        }
+  197   1        
+  198   1      
+  199   1      
+  200   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =    ------     ------
+  ecode size           =       647     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =        15          7
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =        32     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

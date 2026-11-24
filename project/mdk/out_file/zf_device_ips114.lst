@@ -1,0 +1,885 @@
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE zf_device_ips114
+OBJECT MODULE PLACED IN .\out_file\zf_device_ips114.obj
+COMPILER INVOKED BY: E:\Keil5\C251\BIN\C251.EXE ..\..\libraries\zf_device\zf_device_ips114.c LARGE FLOAT64 ROM(HUGE) WAR
+                    -NINGLEVEL(3) OPTIMIZE(SIZE) BROWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_dev
+                    -ice;..\..\libraries\zf_driver;..\user;..\code;..\..\libraries\zf_components\stc32g_usb_lib;..\..\libraries\zf_components
+                    -\seekfree_assistant;..\..\Harderware) DEBUG PRINT(.\out_file\zf_device_ips114.lst) TABS(2) OBJECT(.\out_file\zf_device_i
+                    -ps114.obj) 
+
+stmt  level    source
+
+    1          /********************************************************************************************************
+             -*************
+    2          * STC32G Opensourec Library 即（STC32G 开源库）是一个基于官方 SDK 接口的第三方开源�
+             -�
+    3          * Copyright (c) 2025 SEEKFREE 逐飞科技
+    4          *
+    5          * 本文件是STC32G144K开源库的一部分
+    6          *
+    7          * STC32G 开源库 是免费软件
+    8          * 您可以根据自由软件基金会发布的 GPL（GNU General Public License，即 GNU通用公共许
+             -可证）的条款
+    9          * 即 GPL 的第3版（即 GPL3.0）或（您选择的）任何后来的版本，重新发布和/或修�
+             -�它
+   10          *
+   11          * 本开源库的发布是希望它能发挥作用，但并未对其作任何的保证
+   12          * 甚至没有隐含的适销性或适合特定用途的保证
+   13          * 更多细节请参见 GPL
+   14          *
+   15          * 您应该在收到本开源库的同时收到一份 GPL 的副本
+   16          * 如果没有，请参阅<https://www.gnu.org/licenses/>
+   17          *
+   18          * 额外注明：
+   19          * 本开源库使用 GPL3.0 开源许可证协议 以上许可申明为译文版本
+   20          * 许可申明英文版在 libraries/doc 文件夹下的 GPL3_permission_statement.txt 文件中
+   21          * 许可证副本在 libraries 文件夹下 即该文件夹下的 LICENSE 文件
+   22          * 欢迎各位使用并传播本程序 但修改内容时必须保留逐飞科技的版权声明（即本
+             -声明）
+   23          *
+   24          * 文件名称          
+   25          * 公司名称           成都逐飞科技有限公司
+   26          * 版本信息          查看 libraries/doc 文件夹内 version 文件 版本说明
+   27          * 开发环境          MDK FOR C251
+   28          * 适用平台          STC32G144K
+   29          * 店铺链接          https://seekfree.taobao.com/
+   30          *
+   31          * 修改记录
+   32          * 日期              作者           备注
+   33          * 2024-08-01        大W            first version
+   34          *********************************************************************************************************
+             -***********/
+   35          /********************************************************************************************************
+             -*************
+   36          * 接线定义：
+   37          *                   ------------------------------------
+   38          *                   模块管脚             单片机管脚
+   39          *                   SCL                  查看 zf_device_ips114.h 中 IPS114_SCL_PIN 宏定义
+   40          *                   SDA                  查看 zf_device_ips114.h 中 IPS114_SDA_PIN 宏定义
+   41          *                   RST                  查看 zf_device_ips114.h 中 IPS114_RST_PIN 宏定义
+   42          *                   DC                   查看 zf_device_ips114.h 中 IPS114_DC_PIN  宏定义
+   43          *                   CS                   查看 zf_device_ips114.h 中 IPS114_CS_PIN  宏定义
+   44          *                   BLK                  查看 zf_device_ips114.h 中 IPS114_BLK_PIN 宏定义
+   45          *                   VCC                 3.3V电源
+   46          *                   GND                 电源地
+   47          *                   最大分辨率 135 * 240
+   48          *                   ------------------------------------
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 2   
+
+   49          *********************************************************************************************************
+             -***********/
+   50          
+   51          #include "zf_common_clock.h"
+   52          #include "zf_common_debug.h"
+   53          #include "zf_common_font.h"
+   54          #include "zf_common_function.h"
+   55          #include "zf_driver_delay.h"
+   56          #include "zf_driver_spi.h"
+   57          
+   58          #include "zf_device_ips114.h"
+   59          
+   60          #define IPS_LEN   240
+   61          #define IPS_WIGHT 135
+   62          
+   63          uint16 ips114_pencolor = IPS114_DEFAULT_PENCOLOR;
+   64          uint16 ips114_bgcolor = IPS114_DEFAULT_BGCOLOR;
+   65          
+   66          ips114_dir_enum ips114_display_dir = IPS114_DEFAULT_DISPLAY_DIR;
+   67          uint8 ips114_x_max = IPS_LEN;
+   68          uint8 ips114_y_max = IPS_WIGHT;
+   69          
+   70          #if (IPS114_USE_INTERFACE==SOFT_SPI)
+                 static soft_spi_info_struct             ips114_spi;
+                 #define ips114_write_8bit_data(dat)    soft_spi_write_8bit(&ips114_spi, dat)
+                 #define ips114_write_16bit_data(dat)   soft_spi_write_16bit(&ips114_spi, dat)
+               #elif (IPS114_USE_INTERFACE==HARDWARE_SPI)
+   75            #define ips114_write_8bit_data(dat)              spi_dma_write_8bit(IPS114_SPI, dat)
+   76            #define ips114_write_16bit_data(dat)             spi_dma_write_16bit(IPS114_SPI, dat)
+   77              #define ips114_write_16bit_data_array(dat, len)  spi_dma_write_16bit_array(IPS114_SPI, dat, len)
+   78          #endif
+   79          
+   80          //-------------------------------------------------------------------------------------------------------
+             -------------
+   81          // 函数简介       写命令 内部调用
+   82          // @note        内部调用 用户无需关心
+   83          //-------------------------------------------------------------------------------------------------------
+             -------------
+   84          static void ips114_write_index (uint8 dat)
+   85          {
+   86   1          IPS114_CS(1);
+   87   1          IPS114_CS(0);
+   88   1          IPS114_DC(0);
+   89   1          ips114_write_8bit_data(dat);
+   90   1          IPS114_DC(1);
+   91   1          IPS114_CS(1);
+   92   1          IPS114_CS(0);
+   93   1      }
+   94          
+   95          //-------------------------------------------------------------------------------------------------------
+             -------------
+   96          // 函数简介       设置显示区域 内部调用
+   97          // 参数说明       x1              起始x轴坐标
+   98          // 参数说明       y1              起始y轴坐标
+   99          // 参数说明       x2              结束x轴坐标
+  100          // 参数说明       y2              结束y轴坐标
+  101          // 返回参数      void
+  102          // @note        内部调用 用户无需关心
+  103          //-------------------------------------------------------------------------------------------------------
+             -------------
+  104          static void ips114_set_region (uint16 x1, uint16 y1, uint16 x2, uint16 y2)
+  105          {
+  106   1          zf_assert(x1 < ips114_x_max);
+  107   1          zf_assert(y1 < ips114_y_max);
+  108   1          zf_assert(x2 < ips114_x_max);
+  109   1          zf_assert(y2 < ips114_y_max);
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 3   
+
+  110   1      
+  111   1          if(ips114_display_dir==IPS114_PORTAIT)
+  112   1          {
+  113   2              ips114_write_index(0x2a);                                               // 列地址设置
+  114   2              ips114_write_16bit_data(x1+52);
+  115   2              ips114_write_16bit_data(x2+52);
+  116   2              ips114_write_index(0x2b);                                               // 行地址设置
+  117   2              ips114_write_16bit_data(y1+40);
+  118   2              ips114_write_16bit_data(y2+40);
+  119   2              ips114_write_index(0x2c);                                               // 储存器写
+  120   2          }
+  121   1          else if(ips114_display_dir==IPS114_PORTAIT_180)
+  122   1          {
+  123   2              ips114_write_index(0x2a);                                               // 列地址设置
+  124   2              ips114_write_16bit_data(x1+53);
+  125   2              ips114_write_16bit_data(x2+53);
+  126   2              ips114_write_index(0x2b);                                               // 行地址设置
+  127   2              ips114_write_16bit_data(y1+40);
+  128   2              ips114_write_16bit_data(y2+40);
+  129   2              ips114_write_index(0x2c);                                               // 储存器写
+  130   2          }
+  131   1          else if(ips114_display_dir==IPS114_CROSSWISE)
+  132   1          {
+  133   2              ips114_write_index(0x2a);                                               // 列地址设置
+  134   2              ips114_write_16bit_data(x1+40);
+  135   2              ips114_write_16bit_data(x2+40);
+  136   2              ips114_write_index(0x2b);                                               // 行地址设置
+  137   2              ips114_write_16bit_data(y1+53);
+  138   2              ips114_write_16bit_data(y2+53);
+  139   2              ips114_write_index(0x2c);                                               // 储存器写
+  140   2          }
+  141   1          else
+  142   1          {
+  143   2              ips114_write_index(0x2a);                                               // 列地址设置
+  144   2              ips114_write_16bit_data(x1+40);
+  145   2              ips114_write_16bit_data(x2+40);
+  146   2              ips114_write_index(0x2b);                                               // 行地址设置
+  147   2              ips114_write_16bit_data(y1+52);
+  148   2              ips114_write_16bit_data(y2+52);
+  149   2              ips114_write_index(0x2c);                                               // 储存器写
+  150   2          }
+  151   1      }
+  152          
+  153          //-------------------------------------------------------------------------------------------------------
+             -------------
+  154          // 函数简介       液晶清屏函数
+  155          // 参数说明       color           颜色格式 RGB565 或者可以使用 zf_common_font.h 内常用�
+             -�色宏定义
+  156          // 返回参数      void
+  157          // 使用示例                ips114_clear(YELLOW);
+  158          //-------------------------------------------------------------------------------------------------------
+             -------------
+  159          void ips114_clear (uint16 color)
+  160          {
+  161   1          uint16 i;
+  162   1          uint16 tmp[IPS_LEN];
+  163   1          ips114_set_region(0, 0, ips114_x_max - 1, ips114_y_max - 1);
+  164   1      
+  165   1          for(i = 0; i < IPS_LEN; i ++)
+  166   1          {
+  167   2              tmp[i] = color;
+  168   2          }
+  169   1        for(i = 0; i < IPS_WIGHT; i ++)
+  170   1          {
+  171   2              ips114_write_16bit_data_array(tmp, IPS_LEN);
+  172   2          }
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 4   
+
+  173   1      }
+  174          
+  175          //-------------------------------------------------------------------------------------------------------
+             -------------
+  176          // 函数简介       设置显示方向 这个函数只有在初始化屏幕之前调用才生效
+  177          // 参数说明       dir             显示方向  参照 zf_device_ips114.h 内 ips114_dir_enum 枚举�
+             -��定义
+  178          // 返回参数      void
+  179          // 使用示例                ips114_set_dir(IPS114_CROSSWISE);
+  180          //-------------------------------------------------------------------------------------------------------
+             -------------
+  181          void ips114_set_dir (ips114_dir_enum dir)
+  182          {
+  183   1          ips114_display_dir = dir;
+  184   1          if(dir < 2)
+  185   1          {
+  186   2              ips114_x_max = IPS_WIGHT;
+  187   2              ips114_y_max = IPS_LEN;
+  188   2          }
+  189   1          else
+  190   1          {
+  191   2              ips114_x_max = IPS_LEN;
+  192   2              ips114_y_max = IPS_WIGHT;
+  193   2          }
+  194   1      }
+  195          
+  196          //-------------------------------------------------------------------------------------------------------
+             -------------
+  197          // 函数简介       设置显示颜色
+  198          // 参数说明       pen             颜色格式 RGB565 或者可以使用 zf_common_font.h 内常用�
+             -�色宏定义
+  199          // 参数说明       bgcolor         颜色格式 RGB565 或者可以使用 zf_common_font.h 内常用�
+             -�色宏定义
+  200          // 返回参数      void
+  201          // 使用示例                ips114_set_color(WHITE,BLACK);
+  202          //-------------------------------------------------------------------------------------------------------
+             -------------
+  203          void ips114_set_color (uint16 pen, uint16 bgcolor)
+  204          {
+  205   1          ips114_pencolor = pen;
+  206   1          ips114_bgcolor = bgcolor;
+  207   1      }
+  208          
+  209          //-------------------------------------------------------------------------------------------------------
+             -------------
+  210          // 函数简介       液晶画点
+  211          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  212          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  213          // 参数说明       dat             需要显示的颜色
+  214          // 返回参数      void
+  215          // 使用示例                ips114_draw_point(0,0,RED);                     // 坐标 0,0 画一个红
+             -色的点
+  216          //-------------------------------------------------------------------------------------------------------
+             -------------
+  217          void ips114_draw_point (uint16 x,uint16 y,uint16 color)
+  218          {
+  219   1          zf_assert(x < ips114_x_max);
+  220   1          zf_assert(y < ips114_y_max);
+  221   1      
+  222   1          ips114_set_region(x,y,x,y);
+  223   1          ips114_write_16bit_data(color);
+  224   1      }
+  225          
+  226          //-------------------------------------------------------------------------------------------------------
+             -------------
+  227          // 函数简介       液晶显示字符
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 5   
+
+  228          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  229          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  230          // 参数说明       dat             需要显示的字符
+  231          // 返回参数      void
+  232          // 使用示例                ips114_show_char(0,0,'x');                      // 坐标 0,0 写一个字
+             -符 x
+  233          //-------------------------------------------------------------------------------------------------------
+             -------------
+  234          void ips114_show_char (uint16 x,uint16 y,const char dat)
+  235          {
+  236   1          uint8 i,j;
+  237   1          uint8 temp;
+  238   1        
+  239   1        zf_assert(x < ips114_x_max);
+  240   1          zf_assert(y < ips114_y_max);
+  241   1        
+  242   1          for(i=0; i<16; i++)
+  243   1          {
+  244   2              ips114_set_region(x,y+i,x+7,y+i);
+  245   2              temp = ascii_font_8x16[dat-32][i];                                            //减 32 因为是�
+             -��模是从空格开始取得 空格在 ascii 中序号是 32
+  246   2              for(j=0; j<8; j++)
+  247   2              {
+  248   3                  if(temp&0x01)   
+  249   3                      ips114_write_16bit_data(ips114_pencolor);
+  250   3                  else
+  251   3                      ips114_write_16bit_data(ips114_bgcolor);
+  252   3                  temp>>=1;
+  253   3              }
+  254   2          }
+  255   1      }
+  256          
+  257          //-------------------------------------------------------------------------------------------------------
+             -------------
+  258          // 函数简介       液晶显示字符串
+  259          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  260          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  261          // 参数说明       dat             需要显示的字符串
+  262          // 返回参数      void
+  263          // 使用示例                ips114_show_string(0,0,"seekfree");
+  264          //-------------------------------------------------------------------------------------------------------
+             -------------
+  265          void ips114_show_string (uint16 x,uint16 y,const char dat[])
+  266          {
+  267   1        uint16 j = 0;
+  268   1        
+  269   1          zf_assert(x < ips114_x_max);
+  270   1          zf_assert(y < ips114_y_max);
+  271   1      
+  272   1          while(dat[j] != '\0')
+  273   1          {
+  274   2              ips114_show_char(x+8*j,y,dat[j]);
+  275   2              j++;
+  276   2          }
+  277   1      }
+  278          
+  279          //-------------------------------------------------------------------------------------------------------
+             -------------
+  280          //  @brief      液晶显示8位有符号
+  281          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  282          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  283          //  @param      dat             需要显示的变量，数据类型int8
+  284          //  @return     void
+  285          //  Sample usage:               ips114_show_int8(0,0,x);                        // x为 int8 类型
+  286          //-------------------------------------------------------------------------------------------------------
+             -------------
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 6   
+
+  287          void ips114_show_int8(uint16 x,uint16 y,int8 dat)
+  288          {
+  289   1        uint8 a[3];
+  290   1          uint8 i;
+  291   1        
+  292   1          zf_assert(x < ips114_x_max);
+  293   1          zf_assert(y < ips114_y_max);
+  294   1      
+  295   1          if(dat<0)
+  296   1          {
+  297   2              ips114_show_char(x,y,'-');
+  298   2              dat = -dat;
+  299   2          }
+  300   1          else
+  301   1              ips114_show_char(x,y,' ');
+  302   1          
+  303   1          a[0] = dat/100;
+  304   1          a[1] = dat/10%10;
+  305   1          a[2] = dat%10;
+  306   1          i = 0;
+  307   1          while(i<3)
+  308   1          {
+  309   2              ips114_show_char(x+(8*(i+1)),y,(uint8)('0' + a[i]));
+  310   2              i++;
+  311   2          }
+  312   1      }
+  313          
+  314          //-------------------------------------------------------------------------------------------------------
+             -------------
+  315          // 函数简介       液晶显示8位无符号
+  316          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  317          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  318          // 参数说明       dat             需要显示的变量 数据类型uint8
+  319          // 返回参数      void
+  320          // 使用示例                ips114_show_uint8(0,0,x);                       // x 为 uint8 类型
+  321          //-------------------------------------------------------------------------------------------------------
+             -------------
+  322          void ips114_show_uint8(uint16 x,uint16 y,uint8 dat)
+  323          {
+  324   1          uint8 a[3];
+  325   1          uint8 i;
+  326   1        
+  327   1          zf_assert(x < ips114_x_max);
+  328   1          zf_assert(y < ips114_y_max);
+  329   1        
+  330   1          a[0] = dat/100;
+  331   1          a[1] = dat/10%10;
+  332   1          a[2] = dat%10;
+  333   1          i = 0;
+  334   1          while(i<3)
+  335   1          {
+  336   2              ips114_show_char(x+(8*i),y,(uint8)('0' + a[i]));
+  337   2              i++;
+  338   2          }
+  339   1          
+  340   1      }
+  341          
+  342          //-------------------------------------------------------------------------------------------------------
+             -------------
+  343          // 函数简介       液晶显示16位有符号
+  344          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  345          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  346          // 参数说明       dat             需要显示的变量 数据类型int16
+  347          // 返回参数      void
+  348          // 使用示例                ips114_show_int16(0,0,x);                       // x 为 int16 类型
+  349          //-------------------------------------------------------------------------------------------------------
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 7   
+
+             -------------
+  350          void ips114_show_int16(uint16 x,uint16 y,int16 dat)
+  351          {
+  352   1          uint8 a[5];
+  353   1          uint8 i;
+  354   1        
+  355   1          zf_assert(x < ips114_x_max);
+  356   1          zf_assert(y < ips114_y_max);
+  357   1      
+  358   1          if(dat<0)
+  359   1          {
+  360   2              ips114_show_char(x,y,'-');
+  361   2              dat = -dat;
+  362   2          }
+  363   1          else    ips114_show_char(x,y,' ');
+  364   1      
+  365   1          a[0] = dat/10000;
+  366   1          a[1] = dat/1000%10;
+  367   1          a[2] = dat/100%10;
+  368   1          a[3] = dat/10%10;
+  369   1          a[4] = dat%10;
+  370   1          
+  371   1          i = 0;
+  372   1          while(i<5)
+  373   1          {
+  374   2              ips114_show_char(x+(8*(i+1)),y,(uint8)('0' + a[i]));
+  375   2              i++;
+  376   2          }
+  377   1      }
+  378          
+  379          //-------------------------------------------------------------------------------------------------------
+             -------------
+  380          // 函数简介       液晶显示16位无符号
+  381          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  382          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  383          // 参数说明       dat             需要显示的变量，数据类型uint16
+  384          // 返回参数      void
+  385          // 使用示例                ips114_show_uint16(0,0,x);                      // x 为 uint16 类型
+  386          //-------------------------------------------------------------------------------------------------------
+             -------------
+  387          void ips114_show_uint16(uint16 x,uint16 y,uint16 dat)
+  388          {
+  389   1          uint8 a[5];
+  390   1          uint8 i;
+  391   1        
+  392   1          zf_assert(x < ips114_x_max);
+  393   1          zf_assert(y < ips114_y_max);
+  394   1        
+  395   1          a[0] = dat/10000;
+  396   1          a[1] = dat/1000%10;
+  397   1          a[2] = dat/100%10;
+  398   1          a[3] = dat/10%10;
+  399   1          a[4] = dat%10;
+  400   1          
+  401   1          i = 0;
+  402   1          while(i<5)
+  403   1          {
+  404   2              ips114_show_char(x+(8*i),y,(uint8)('0' + a[i]));
+  405   2              i++;
+  406   2          }
+  407   1      }
+  408          
+  409          //-------------------------------------------------------------------------------------------------------
+             -------------
+  410          // 函数简介       液晶显示32位有符号(去除整数部分无效的0)
+  411          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 8   
+
+  412          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  413          // 参数说明       dat             需要显示的变量，数据类型uint32
+  414          // 参数说明       num             需要显示的位数 最高10位  不包含正负号
+  415          // 返回参数      void
+  416          // 使用示例                ips114_show_int32(0,0,x,3);                     // x 可以为 int32 uint1
+             -6 int16 uint8 int8 类型
+  417          // note:                        负数会显示一个 ‘-’号   正数显示一个空格
+  418          //-------------------------------------------------------------------------------------------------------
+             -------------
+  419          void ips114_show_int32(uint16 x,uint16 y,int32 dat,uint8 num)
+  420          {
+  421   1        
+  422   1          int8    buff[34];
+  423   1          uint8   length;
+  424   1        
+  425   1          zf_assert(x < ips114_x_max);
+  426   1          zf_assert(y < ips114_y_max);
+  427   1      
+  428   1          if(10<num)      num = 10;
+  429   1          
+  430   1          num++;
+  431   1          if(0>dat)   length = zf_sprintf( &buff[0],(const int8 *)"%d",dat);        // 负数
+  432   1          else
+  433   1          {
+  434   2              buff[0] = ' ';
+  435   2              length = zf_sprintf( &buff[1],(const int8 *)"%d",dat);
+  436   2              length++;
+  437   2          }
+  438   1          while(length < num)
+  439   1          {
+  440   2              buff[length] = ' ';
+  441   2              length++;
+  442   2          }
+  443   1          buff[num] = '\0';
+  444   1      
+  445   1          ips114_show_string(x, y, (const char *)buff);                               // 显示数字
+  446   1      }
+  447          
+  448          //-------------------------------------------------------------------------------------------------------
+             -------------
+  449          // 函数简介       液晶显示浮点数(去除整数部分无效的0)
+  450          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  451          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  452          // 参数说明       dat             需要显示的变量，数据类型float或double
+  453          // 参数说明       num             整数位显示长度   最高10位
+  454          // 参数说明       pointnum        小数位显示长度   最高6位
+  455          // 返回参数      void
+  456          // 使用示例                ips114_show_float(0,0,x,2,3);                    // 显示浮点数   整�
+             -��显示2位   小数显示三位
+  457          // @note                        特别注意当发现小数部分显示的值与你写入的值不一样�
+             -��时候，
+  458          //                              可能是由于浮点数精度丢失问题导致的，这并不是显示�
+             -��数的问题，
+  459          //                              有关问题的详情，请自行百度学习   浮点数精度丢失问�
+             -��。
+  460          //                              负数会显示一个 ‘-’号   正数显示一个空格
+  461          //-------------------------------------------------------------------------------------------------------
+             -------------
+  462          void ips114_show_float(uint16 x,uint16 y,double dat,uint8 num,uint8 pointnum)
+  463          {
+  464   1          uint8   length;
+  465   1          int8    buff[34];
+  466   1          int8    start,end,point;
+  467   1        
+  468   1          zf_assert(x < ips114_x_max);
+  469   1          zf_assert(y < ips114_y_max);
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 9   
+
+  470   1        
+  471   1          if(6<pointnum)  pointnum = 6;
+  472   1          if(10<num)      num = 10;
+  473   1              
+  474   1          if(0>dat)   length = zf_sprintf( &buff[0],(const int8 *)"%f",dat);        // 负数
+  475   1          else
+  476   1          {
+  477   2              length = zf_sprintf( &buff[1],(const int8 *)"%f",dat);
+  478   2              length++;
+  479   2          }
+  480   1          point = length - 7;                                                         // 计算小数点位置
+  481   1          start = point - num - 1;                                                    // 计算起始位
+  482   1          end = point + pointnum + 1;                                                 // 计算结束位
+  483   1          while(0>start)                                                              // 整数位不够  末�
+             -�应该填充空格
+  484   1          {
+  485   2              buff[end] = ' ';
+  486   2              end++;
+  487   2              start++;
+  488   2          }
+  489   1          
+  490   1          if(0>dat)   buff[start] = '-';
+  491   1          else        buff[start] = ' ';
+  492   1          
+  493   1          buff[end] = '\0';
+  494   1      
+  495   1          ips114_show_string(x, y, (const char *)buff);                               // 显示数字
+  496   1      }
+  497          
+  498          
+  499          //-------------------------------------------------------------------------------------------------------
+             -------------
+  500          // 函数简介       IPS114 显示波形
+  501          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  502          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  503          // 参数说明       *p              波形数组指针
+  504          // 参数说明       width           波形实际宽度
+  505          // 参数说明       value_max       波形实际最大值
+  506          // 参数说明       dis_width       波形显示宽度 参数范围 [0, ips114_x_max]
+  507          // 参数说明       dis_value_max   波形显示最大值 参数范围 [0, ips114_y_max]
+  508          // 返回参数      void
+  509          // 使用示例                ips114_show_gray_image(0,0,camera_buffer_addr,MT9V03X_W,MT9V03X_H,240,135,
+             -128);
+  510          //-------------------------------------------------------------------------------------------------------
+             -------------
+  511          void ips114_show_wave(uint16 x, uint16 y, uint8 *p, uint16 width, uint16 value_max, uint16 dis_width, uin
+             -t16 dis_value_max)
+  512          {
+  513   1          uint32 i = 0, j = 0;
+  514   1          uint32 width_index, value_max_index;
+  515   1        
+  516   1          zf_assert(x < ips114_x_max);
+  517   1          zf_assert(y < ips114_y_max);
+  518   1        
+  519   1          ips114_set_region(x, y, x+dis_width-1, y+dis_value_max-1);                  // 设置显示区域
+  520   1          for(i=0;i<dis_value_max;i++)
+  521   1          {
+  522   2              for(j=0;j<dis_width;j++)
+  523   2              {
+  524   3                  ips114_write_16bit_data(ips114_bgcolor); 
+  525   3              }
+  526   2          }
+  527   1      
+  528   1          for(i=0;i<dis_width;i++)
+  529   1          {
+  530   2              width_index = i*width/dis_width;
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 10  
+
+  531   2              value_max_index = *(p+width_index)*(dis_value_max-1)/value_max;
+  532   2              ips114_draw_point(i+x, (dis_value_max-1)-value_max_index+y, ips114_pencolor);
+  533   2          }
+  534   1      }
+  535          
+  536          //-------------------------------------------------------------------------------------------------------
+             -------------
+  537          // 函数简介     IPS114 显示 8bit 灰度图像 带二值化阈值
+  538          // 参数说明     x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  539          // 参数说明     y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  540          // 参数说明     *image          图像数组指针
+  541          // 参数说明     width           图像实际宽度
+  542          // 参数说明     height          图像实际高度
+  543          // 参数说明     dis_width       图像显示宽度 参数范围 [0, ips114_x_max]
+  544          // 参数说明     dis_height      图像显示高度 参数范围 [0, ips114_y_max]
+  545          // 参数说明     threshold       二值化显示阈值 0-不开启二值化
+  546          // 返回参数     void
+  547          // 使用示例     ips114_show_gray_image(0, 0, mt9v03x_image[0], MT9V03X_W, MT9V03X_H, MT9V03X_W, MT9V0
+             -3X_H, 0);
+  548          // 备注信息     用于显示总钻风的图像
+  549          //              如果要显示二值化图像 直接修改最后一个参数为需要的二值化阈值�
+             -��可
+  550          //              如果要显示二值化图像 直接修改最后一个参数为需要的二值化阈值�
+             -��可
+  551          //              如果要显示二值化图像 直接修改最后一个参数为需要的二值化阈值�
+             -��可
+  552          //-------------------------------------------------------------------------------------------------------
+             -------------
+  553          void ips114_show_gray_image (uint16 x, uint16 y, const uint8 *image, uint16 width, uint16 height, uint16 
+             -dis_width, uint16 dis_height, uint8 threshold)
+  554          {
+  555   1          uint32 i = 0, j = 0;
+  556   1          uint16 color, temp;
+  557   1          uint16 data_buffer[IPS_LEN];
+  558   1          const uint8 *image_temp;
+  559   1      
+  560   1          // 如果程序在输出了断言信息 并且提示出错位置在这里
+  561   1          // 那么一般是屏幕显示的时候超过屏幕分辨率范围了
+  562   1          zf_assert(x < ips114_x_max);
+  563   1          zf_assert(y < ips114_y_max);
+  564   1          zf_assert(NULL != image);
+  565   1      
+  566   1          IPS114_CS(0);
+  567   1          ips114_set_region(x, y, x + dis_width - 1, y + dis_height - 1);             // 设置显示区域
+  568   1      
+  569   1          for(j = 0; j < dis_height; j ++)
+  570   1          {
+  571   2              image_temp = image + j * height / dis_height * width;                   // 直接对 image 操作
+             -会 Hardfault 暂时不知道为什么
+  572   2              for(i = 0; i < dis_width; i ++)
+  573   2              {
+  574   3                  temp = *(image_temp + i * width / dis_width);                       // 读取像素点
+  575   3                  if(threshold == 0)
+  576   3                  {
+  577   4                      color = (0x001f & ((temp) >> 3)) << 11;
+  578   4                      color = color | (((0x003f) & ((temp) >> 2)) << 5);
+  579   4                      color = color | (0x001f & ((temp) >> 3));
+  580   4                      data_buffer[i] = (color);
+  581   4                  }
+  582   3                  else if(temp < threshold)
+  583   3                  {
+  584   4                      data_buffer[i] = (RGB565_BLACK);
+  585   4                  }
+  586   3                  else
+  587   3                  {
+  588   4                      data_buffer[i] = (RGB565_WHITE);
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 11  
+
+  589   4                  }
+  590   3              }
+  591   2              ips114_write_16bit_data_array(data_buffer, dis_width);
+  592   2          }
+  593   1          IPS114_CS(1);
+  594   1      }
+  595          
+  596          //-------------------------------------------------------------------------------------------------------
+             -------------
+  597          // 函数简介       汉字显示
+  598          // 参数说明       x               坐标x方向的起点 参数范围 [0, ips114_x_max-1]
+  599          // 参数说明       y               坐标y方向的起点 参数范围 [0, ips114_y_max-1]
+  600          // 参数说明       siz            取模的时候设置的汉字字体大小 也就是一个汉字占�
+             -��的点阵长宽为多少个点 取模的时候需要长宽是一样的
+  601          // 参数说明       *p              需要显示的汉字数组
+  602          // 参数说明       number          需要显示多少位
+  603          // 参数说明       color           显示颜色
+  604          // 返回参数      void
+  605          // 使用示例                ips114_show_chinese(0,0,16,chinese_test[0],4,RED);//显示font文件里面
+             -的 示例
+  606          // 备注信息                        使用PCtoLCD2002软件取模           阴码、逐行式、顺�
+             -�   16*16
+  607          //-------------------------------------------------------------------------------------------------------
+             -------------
+  608          void ips114_show_chinese (uint16 x, uint16 y, uint8 siz, const uint8 *p, uint8 number, uint16 color)
+  609          {
+  610   1      
+  611   1          int i, j, k; 
+  612   1          uint8 temp, temp1, temp2;
+  613   1          const uint8 *p_data;
+  614   1              
+  615   1        zf_assert(x < ips114_x_max);
+  616   1          zf_assert(y < ips114_y_max);
+  617   1      
+  618   1          temp2 = siz/8;
+  619   1          
+  620   1          ips114_set_region(x,y,number*siz-1+x,y+siz-1);
+  621   1          
+  622   1          for(i=0;i<siz;i++)
+  623   1          {
+  624   2              temp1 = number;
+  625   2              p_data = p+i*temp2;
+  626   2              while(temp1--)
+  627   2              {
+  628   3                  for(k=0;k<temp2;k++)
+  629   3                  {
+  630   4                      for(j=8;j>0;j--)
+  631   4                      {
+  632   5                          temp = (*p_data>>(j-1)) & 0x01;
+  633   5                          if(temp)    ips114_write_16bit_data(color);
+  634   5                          else        ips114_write_16bit_data(ips114_bgcolor);
+  635   5                      }
+  636   4                      p_data++;
+  637   4                  }
+  638   3                  p_data = p_data - temp2 + temp2*siz;
+  639   3              }   
+  640   2          }
+  641   1      }
+  642          
+  643          //-------------------------------------------------------------------------------------------------------
+             -------------
+  644          // 函数简介       1.14寸 IPS液晶初始化
+  645          // 返回参数      void
+  646          // 使用示例                ips114_init();
+  647          //-------------------------------------------------------------------------------------------------------
+             -------------
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 12  
+
+  648          void ips114_init (void)
+  649          {
+  650   1      #if (IPS114_USE_INTERFACE==SOFT_SPI)
+                   soft_spi_init(&ips114_spi, SPI_MODE0, IPS114_SOFT_SPI_DELAY, IPS114_SCL_PIN, IPS114_SDA_PIN, SOFT_SPI
+             -_PIN_NULL, SOFT_SPI_PIN_NULL);
+               #elif (IPS114_USE_INTERFACE==HARDWARE_SPI)
+  653   1          zf_assert(IPS114_SPI != (IPS114_SCL_PIN&0xF000>>12));
+  654   1          zf_assert(IPS114_SPI != (IPS114_SDA_PIN&0xF000>>12));
+  655   1          spi_dma_init(IPS114_SPI, SPI_MODE0, IPS114_SPI_SPEED, IPS114_SCL_PIN, IPS114_SDA_PIN, SPI_MISO_NULL, 
+             -SPI_CS_NULL);
+  656   1      #endif
+  657   1      
+  658   1          gpio_init(IPS114_DC_PIN, GPO, GPIO_LOW, GPO_PUSH_PULL);
+  659   1          gpio_init(IPS114_RST_PIN, GPO, GPIO_LOW, GPO_PUSH_PULL);
+  660   1          gpio_init(IPS114_CS_PIN, GPO, GPIO_LOW, GPO_PUSH_PULL);
+  661   1          gpio_init(IPS114_BLK_PIN, GPO, GPIO_HIGH, GPO_PUSH_PULL);
+  662   1      
+  663   1          ips114_set_dir(ips114_display_dir);
+  664   1          ips114_set_color(ips114_pencolor, ips114_bgcolor);
+  665   1      
+  666   1          IPS114_RST(0);
+  667   1          system_delay_ms(200);
+  668   1      
+  669   1          IPS114_RST(1);
+  670   1          system_delay_ms(100);
+  671   1      
+  672   1          ips114_write_index(0x36);
+  673   1          system_delay_ms(100);
+  674   1          if      (ips114_display_dir==0) ips114_write_8bit_data(0x00);
+  675   1          else if (ips114_display_dir==1) ips114_write_8bit_data(0xC0);
+  676   1          else if (ips114_display_dir==2) ips114_write_8bit_data(0x70);
+  677   1          else                            ips114_write_8bit_data(0xA0);
+  678   1      
+  679   1          ips114_write_index(0x3A);
+  680   1          ips114_write_8bit_data(0x05);
+  681   1      
+  682   1          ips114_write_index(0xB2);
+  683   1          ips114_write_8bit_data(0x0C);
+  684   1          ips114_write_8bit_data(0x0C);
+  685   1          ips114_write_8bit_data(0x00);
+  686   1          ips114_write_8bit_data(0x33);
+  687   1          ips114_write_8bit_data(0x33);
+  688   1      
+  689   1          ips114_write_index(0xB7);
+  690   1          ips114_write_8bit_data(0x35);
+  691   1      
+  692   1          ips114_write_index(0xBB);
+  693   1          ips114_write_8bit_data(0x37);
+  694   1      
+  695   1          ips114_write_index(0xC0);
+  696   1          ips114_write_8bit_data(0x2C);
+  697   1      
+  698   1          ips114_write_index(0xC2);
+  699   1          ips114_write_8bit_data(0x01);
+  700   1      
+  701   1          ips114_write_index(0xC3);
+  702   1          ips114_write_8bit_data(0x12);
+  703   1      
+  704   1          ips114_write_index(0xC4);
+  705   1          ips114_write_8bit_data(0x20);
+  706   1      
+  707   1          ips114_write_index(0xC6);
+  708   1          ips114_write_8bit_data(0x0F);
+  709   1      
+  710   1          ips114_write_index(0xD0);
+  711   1          ips114_write_8bit_data(0xA4);
+C251 COMPILER V5.60.0,  zf_device_ips114                                                   21/11/26  17:07:45  PAGE 13  
+
+  712   1          ips114_write_8bit_data(0xA1);
+  713   1      
+  714   1          ips114_write_index(0xE0);
+  715   1          ips114_write_8bit_data(0xD0);
+  716   1          ips114_write_8bit_data(0x04);
+  717   1          ips114_write_8bit_data(0x0D);
+  718   1          ips114_write_8bit_data(0x11);
+  719   1          ips114_write_8bit_data(0x13);
+  720   1          ips114_write_8bit_data(0x2B);
+  721   1          ips114_write_8bit_data(0x3F);
+  722   1          ips114_write_8bit_data(0x54);
+  723   1          ips114_write_8bit_data(0x4C);
+  724   1          ips114_write_8bit_data(0x18);
+  725   1          ips114_write_8bit_data(0x0D);
+  726   1          ips114_write_8bit_data(0x0B);
+  727   1          ips114_write_8bit_data(0x1F);
+  728   1          ips114_write_8bit_data(0x23);
+  729   1      
+  730   1          ips114_write_index(0xE1);
+  731   1          ips114_write_8bit_data(0xD0);
+  732   1          ips114_write_8bit_data(0x04);
+  733   1          ips114_write_8bit_data(0x0C);
+  734   1          ips114_write_8bit_data(0x11);
+  735   1          ips114_write_8bit_data(0x13);
+  736   1          ips114_write_8bit_data(0x2C);
+  737   1          ips114_write_8bit_data(0x3F);
+  738   1          ips114_write_8bit_data(0x44);
+  739   1          ips114_write_8bit_data(0x51);
+  740   1          ips114_write_8bit_data(0x2F);
+  741   1          ips114_write_8bit_data(0x1F);
+  742   1          ips114_write_8bit_data(0x1F);
+  743   1          ips114_write_8bit_data(0x20);
+  744   1          ips114_write_8bit_data(0x23);
+  745   1      
+  746   1          ips114_write_index(0x21);
+  747   1      
+  748   1          ips114_write_index(0x11);
+  749   1          system_delay_ms(120);
+  750   1      
+  751   1          ips114_write_index(0x29);
+  752   1      
+  753   1          ips114_clear(ips114_bgcolor);
+  754   1      }
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =    ------     ------
+  ecode size           =      4963     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =         8       1165
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =        84     ------
+End of Module Information.
+
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

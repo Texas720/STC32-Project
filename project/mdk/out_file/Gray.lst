@@ -1,0 +1,890 @@
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE Gray
+OBJECT MODULE PLACED IN .\out_file\Gray.obj
+COMPILER INVOKED BY: E:\Keil5\C251\BIN\C251.EXE ..\..\Harderware\Gray.c LARGE FLOAT64 ROM(HUGE) WARNINGLEVEL(3) OPTIMIZE
+                    -(SIZE) BROWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\z
+                    -f_driver;..\user;..\code;..\..\libraries\zf_components\stc32g_usb_lib;..\..\libraries\zf_components\seekfree_assistant;.
+                    -.\..\Harderware) DEBUG PRINT(.\out_file\Gray.lst) TABS(2) OBJECT(.\out_file\Gray.obj) 
+
+stmt  level    source
+
+    1          #include "zf_common_headfile.h"
+    2          #include <string.h>
+    3          #include "Gray.h"
+    4          #include "Element.h"
+    5          
+    6          #define WHITE 0xFF
+    7          #define BLACK 0x00
+    8          #define Min_Length 8            //竖向最小长度，用于判断是否为十字路口
+    9          
+   10          #define GRAY_NUM    (GRAY_W * GRAY_H)       //总共取得的点的数量
+   11          
+   12          #define Max_DifAB 4             //判断为路口时A ,B点的最大高度差
+   13          #define Key_Row   (GRAY_H - 6)        //取边界基准点所在的行
+   14          
+   15          //找偏差值相关
+   16          #define Max_LoseLineTimes 5                 //找偏差时最大丢线行数，多余这个行数判断�
+             -�找到的中点不可信
+   17          #define Min_RoadWeidth    34        //最小赛道宽度，当宽度小于这个值，过远，得到的中�
+             -�不考虑
+   18          #define Forward_LookingLine_Max   30        //前瞻行的最大值
+   19          #define Forward_LookingLine_Min   50        //前瞻行的最小值
+   20          #define Frame_Mind     (GRAY_W >> 1)    //设定的中心
+   21          static const uint8 Weight[9] = {60, 70, 80, 90, 100, 90, 80, 70,  60};           //前瞻区域的权重
+   22          
+   23          /*=================赛道半宽================*/
+   24          //半宽从30行一直到第50行
+   25          static uint16 Half_Width[21] = {13, 14, 15, 19, 20, 20,
+   26                          23, 23, 24, 24, 24, 25,
+   27                          26, 27, 28, 30, 31, 33,
+   28                          33, 33, 34 };
+   29          
+   30          // 左侧方向偏移
+   31          static const int8 LX_Plus[8] = { 1,  1,  0, -1, -1, -1,  0,  1};
+   32          static const int8 LY_Plus[8] = { 0, -1, -1, -1,  0,  1,  1,  1};
+   33          //右侧方向偏移
+   34          static const int8 RX_Plus[8] = {-1, -1,  0,  1,  1,  1,  0, -1};
+   35          static const int8 RY_Plus[8] = { 0, -1, -1, -1,  0,  1,  1,  1};
+   36          
+   37          //用于储存找到的左,右边线
+   38          int16 L_Edge[GRAY_H];
+   39          int16 R_Edge[GRAY_H];
+   40          
+   41          //用于边线显示
+   42          uint16 LW_Update = 0;
+   43          uint16 LW_UpdateLast = 0;
+   44          uint8 L_Times = 0;
+   45          uint16 RW_Update = 0;
+   46          uint8 R_Times = 0;
+   47          uint16 RW_UpdateLast = 0;
+   48          
+   49          //找到的角点
+   50          uint16 AX = 0;
+   51          uint16 AY = 0;
+   52          
+   53          uint16 BX = 0;
+   54          uint16 BY = 0;
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 2   
+
+   55            
+   56          uint16 EX = 0;        //十字路口远端左侧点
+   57          uint16 EY = 0;
+   58            
+   59          uint16 FX = 0;        //十字路口远端右侧点
+   60          uint16 FY = 0;
+   61          uint8  AB_Exist = 0;    //检查A,B是否存在
+   62          uint8  OnlyA_or_B = 0;      //十字部分只看到单个角点的标志位      1：只有A点        2�
+             -�� 只有B点
+   63          uint8  Out_CrossFlag = 0;   //退出十字的标志位
+   64          
+   65          //补线距离
+   66          uint16 Length_A = 0;
+   67          uint16 Length_B = 0;
+   68          
+   69          //截止行
+   70          uint8 End_Line = 0;                     //截至行
+   71          
+   72          //储存找到的中线
+   73          int16 Mid_Line[GRAY_H];
+   74          
+   75          //偏差计算
+   76          int16 Error_Out = 0;
+   77          uint16 Forward_LookingLine_Out = 42;  //前瞻行，导出给主循环画线用（Find_Error 在中断里�
+             -��不能画屏）
+   78          int16 Curve_deviation_threshold = 0;                //统计上下部分偏差值
+   79          int16 RL_Result = 0;                                //退出判据处的赛道宽度，导出给主循环
+             -显示
+   80          
+   81          static uint16 Gray_Hist[256] = {0};
+   82          uint8 Image1[GRAY_W][GRAY_H] = {0};     //二值化之后的图片（下采样后 94 x 60）
+   83          uint8 NOFind_DiffFlagL = 0;             //假如置1 ，表示丢线
+   84          uint8 NOFind_DiffFlagR = 0;             //假如置1 ，表示丢线
+   85          
+   86          /*====================================标准的大津法==============================*/
+   87          uint8 Normal_Gray(uint8 frame[MT9V03X_H][MT9V03X_W])  //注意输入的是灰度图
+   88          {
+   89   1        uint16 i;
+   90   1        uint16 j;
+   91   1        uint8 Temp_Gray;
+   92   1        uint32 Total_Gray = 0;      //全局灰度和
+   93   1        uint32 w0 = 0;          //阈值以下像素数
+   94   1        uint32 w1 = 0;
+   95   1        uint32 sum0 = 0;        //阈值以下灰度和
+   96   1        uint16 m0 = 0;          //阈值以下灰度均值
+   97   1        uint16 m1 = 0;          //阈值以上灰度均值
+   98   1        uint16 d = 0;         //两类均值的差
+   99   1        uint32 score = 0;       //类间方差（放大后）
+  100   1        uint32 best = 0;        //记录遍历过程中找到的最大值
+  101   1        uint8  Low_gray = 0;      //记录最佳阈值（0~255）
+  102   1      
+  103   1        /*============对取得的灰度图进行下采样============*/
+  104   1        for (i = 0 ;i < MT9V03X_H; i += 2)
+  105   1        {
+  106   2          for(j = 0 ; j< MT9V03X_W; j += 2)
+  107   2          {
+  108   3            Temp_Gray = frame[i][j];            //临时变量，用于读取灰度值
+  109   3            Gray_Hist[Temp_Gray] ++ ;     //获取直方图
+  110   3            Total_Gray += Temp_Gray;      
+  111   3          }
+  112   2        }
+  113   1      
+  114   1        /*
+  115   1        Gray_Hist[i]
+  116   1        |
+  117   1        |
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 3   
+
+  118   1        |
+  119   1        |
+  120   1        |
+  121   1        —— —— —— ———— —— —— —— i
+  122   1        */
+  123   1      
+  124   1        for( i = 0; i <= 255; i ++)
+  125   1        {
+  126   2          w1 = GRAY_NUM - w0;      //w1,阈值以上像素个数
+  127   2          if(w0 > 0 && w1 > 0)    // 防止w0或w1为0
+  128   2          {
+  129   3            m0 = (uint16)(sum0 / w0);         //背景（阈值以下）的整数均值（暗区）
+  130   3            m1 = (uint16)((Total_Gray - sum0) / w1);  //前景的整数均值（亮区）
+  131   3            if(m0 > m1)
+  132   3            {
+  133   4              d = m0 - m1;
+  134   4            }
+  135   3            else
+  136   3            {
+  137   4              d = m1 - m0;
+  138   4            }
+  139   3            // 类间方差 ∝ w0*w1*d*d，先右移 8 位防止 32 位溢出（比较大小结果不变）
+  140   3            score = (((w0 * w1) >> 8) * d) * d;
+  141   3            if(score > best)
+  142   3            {
+  143   4              best     = score;
+  144   4              Low_gray = (uint8)i;
+  145   4            }
+  146   3          }
+  147   2          // 为下一个阈值做增量
+  148   2          w0   += Gray_Hist[i];
+  149   2          sum0 += i * Gray_Hist[i];
+  150   2        }
+  151   1        memset (Gray_Hist ,0,sizeof(Gray_Hist));//显示一帧后对储存灰度频率的数组清零，防止�
+             -�度值累计
+  152   1        return Low_gray;
+  153   1      }
+  154          
+  155          
+  156          void Find_Edge(void)   //直接处理全局 Image1（[列][行] 的二值图）
+  157          {
+  158   1        int16  LH;      //当前行号
+  159   1        int16  LW;      //当前边界列号
+  160   1        int16  RH;
+  161   1        int16  RW;
+  162   1        uint8  Lfound;    // 置0 ，表示进入丢线逻辑
+  163   1        uint8  Rfound;
+  164   1        int16  LastX_L;   //上一个边界点
+  165   1        int16  LastY_L;
+  166   1        int16  LastX_R;
+  167   1        int16  LastY_R;
+  168   1        int16  step;    //步数计数
+  169   1        int16  step1;
+  170   1        int16  nx;
+  171   1        int16  ny;
+  172   1        int16  y;
+  173   1        int16  r;
+  174   1        int16  x_right;
+  175   1        int16  x_left;
+  176   1        uint8  re_found;  //重新找到线的标志位
+  177   1        uint8  Fake_Edge = 0;   //如果是在边界点处向上延伸得到的LX，那么这个标志位置1
+  178   1        int16  i;
+  179   1        int16  j;
+  180   1      
+  181   1      
+  182   1        /*===================把储存边界点的数组全部置为-1，防止中线错误出现===============
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 4   
+
+             -======*/
+  183   1        memset(L_Edge, -1, sizeof(L_Edge));
+  184   1        memset(R_Edge, -1, sizeof(R_Edge));
+  185   1      
+  186   1      
+  187   1        AB_Exist = 0;
+  188   1        Length_A = 0;
+  189   1        Length_B = 0;
+  190   1        /*========================================左侧寻线=========================================*/
+  191   1        LH = GRAY_H - 1;    //当前行号
+  192   1        LW = 0;         //当前边界列号
+  193   1        NOFind_DiffFlagL = 0; //每帧开始时清除丢线标志
+  194   1        Lfound = 1;       // 置0 ，表示进入丢线逻辑
+  195   1        //找第一个边界
+  196   1        for(i = GRAY_W / 2; i > 0 ; i --)
+  197   1        {
+  198   2          if(Image1[i][LH] == WHITE && Image1[i - 1][LH] == BLACK)
+  199   2          {
+  200   3            LW = i;
+  201   3            Fake_Edge = 0;
+  202   3            break ;
+  203   3          }
+  204   2          else if(i == 1)
+  205   2          {
+  206   3            Lfound = 0;
+  207   3            Fake_Edge = 1;      //底边没找到：本行不写值，但继续向上搜索，由丢线重搜找回�
+             -�实边界
+  208   3          }
+  209   2        }
+  210   1      
+  211   1        LastX_L = 0;
+  212   1        LastY_L = 0;
+  213   1        step = 0;
+  214   1      
+  215   1        while(LH >= 0 && NOFind_DiffFlagL == 0 && step < 400)
+  216   1        {
+  217   2      
+  218   2          tft180_draw_point(LW, LH, RGB565_GREEN);
+  219   2          if(Fake_Edge != 1)
+  220   2          {
+  221   3            L_Edge[LH] = LW;      // 角标是行数，内容是列数
+  222   3          }
+  223   2          
+  224   2          step++;
+  225   2          Lfound = 0;
+  226   2      
+  227   2          //假如爬到图像边缘并且图像上方是白色，那么向上延伸即可
+  228   2          if(LW <= 2 && LH >= 3 && (Image1[LW][LH - 1] == WHITE || Image1[LW][LH - 3] == WHITE))//检测上方是
+             -否为白色像素
+  229   2          {
+  230   3            LastX_L = LW;
+  231   3            LastY_L = LH;
+  232   3            LH = LH - 1;
+  233   3            Fake_Edge = 1;               //虚假的边界
+  234   3            Lfound = 1;
+  235   3          }
+  236   2      
+  237   2          //逆时针搜索
+  238   2          if(Lfound == 0)
+  239   2          {
+  240   3            for(i = 0; i < 8; i++)       //设置寻找点的坐标偏移
+  241   3            {
+  242   4              nx = LW + LX_Plus[i];
+  243   4              ny = LH + LY_Plus[i];
+  244   4      
+  245   4              //越界检查
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 5   
+
+  246   4              if(nx < 1 || nx >= GRAY_W || ny < 0 || ny >= GRAY_H)
+  247   4              {
+  248   5                continue;
+  249   5              }
+  250   4              //不返回上一个点，防止两个点之间来回震荡
+  251   4              if(nx == LastX_L && ny == LastY_L)
+  252   4              {
+  253   5                continue;
+  254   5              }
+  255   4      
+  256   4              if((Image1[nx][ny] == WHITE && Image1[nx - 1][ny] == BLACK)
+  257   4                 || (ny < GRAY_H - 1 && (Image1[nx][ny] == WHITE && Image1[nx][ny + 1] == BLACK) ) )//针对横向�
+             -�边界判断,(此时，只检测下边界，上边界舍弃)
+  258   4              {
+  259   5                LastX_L  = LW;
+  260   5                LastY_L  = LH;
+  261   5                LW = nx;
+  262   5                LH = ny;
+  263   5                Lfound = 1;
+  264   5                Fake_Edge = 0;
+  265   5                break ;
+  266   5              }
+  267   4            }
+  268   3          }
+  269   2      
+  270   2          //八邻域找不到，那么在当前点的左右两边分别向外找3个像素
+  271   2          if(Lfound == 0 && LH > 0)
+  272   2          {
+  273   3            y = LH ;
+  274   3            for(r = 2; r <= 3 && !Lfound; r++)
+  275   3            {
+  276   4              x_right = LW + r;
+  277   4              x_left  = LW - r;
+  278   4      
+  279   4              if(x_right >= 2 && x_right < GRAY_W - 1 &&
+  280   4                 Image1[x_right][y] == WHITE && Image1[x_right - 1][y] == BLACK)
+  281   4              {
+  282   5                LastX_L = LW;
+  283   5                LastY_L = LH;
+  284   5                LW = x_right;
+  285   5                LH = y;
+  286   5                L_Edge[LH] = LW;    // 角标是行数，内容是列数
+  287   5                Fake_Edge = 0;
+  288   5                Lfound = 1;
+  289   5                break ;
+  290   5              }
+  291   4              if(x_left >= 2 && x_left < GRAY_W - 1 &&
+  292   4                 Image1[x_left][y] == WHITE && Image1[x_left - 1][y] == BLACK)
+  293   4              {
+  294   5                LastX_L = LW;
+  295   5                LastY_L = LH;
+  296   5                LW = x_left;
+  297   5                LH = y;
+  298   5                L_Edge[LH] = LW;    // 角标是行数，内容是列数
+  299   5                Fake_Edge = 0;
+  300   5                Lfound = 1;
+  301   5                break ;
+  302   5              }
+  303   4            }
+  304   3          }
+  305   2      
+  306   2          //丢线逻辑
+  307   2          if(Lfound == 0)
+  308   2          {
+  309   3            NOFind_DiffFlagL = 1;   //丢线
+  310   3            re_found = 0 ;        //重新找到线的标志位
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 6   
+
+  311   3      
+  312   3            //进入丢线逻辑，从最后一次找到边界的位置向上找
+  313   3            for (i = LH - 1 ; i >= 0 && re_found == 0; i--)
+  314   3            {
+  315   4              //横向方向寻找
+  316   4              for (j = GRAY_W / 2 ; j >= 1; j--)
+  317   4              {
+  318   5                if ((Image1[j][i] == WHITE && Image1[j - 1 ][i] == BLACK)
+  319   5                   || (Image1[j][i] == WHITE && Image1[j][i - 1] == BLACK))
+  320   5                {
+  321   6                  LW = j;
+  322   6                  LH = i;
+  323   6                  L_Edge[LH] = LW;
+  324   6                  NOFind_DiffFlagL = 0 ;
+  325   6                  Fake_Edge = 0;
+  326   6                  re_found = 1 ;
+  327   6                  break ;
+  328   6                }
+  329   5              }
+  330   4            }
+  331   3          }
+  332   2         }
+  333   1      
+  334   1        //重置
+  335   1        LH = GRAY_H - 1;
+  336   1      
+  337   1        /*===================右侧寻线==================*/
+  338   1        RH = GRAY_H - 1;    //当前行号
+  339   1        RW = GRAY_W - 1;        //底边没有找到，那么初始值应该设置为最右侧          
+  340   1        NOFind_DiffFlagR = 0; //每帧开始时清除丢线标志
+  341   1        Rfound = 1;       //置0，表示进入丢线逻辑
+  342   1      
+  343   1        //找第一个边界
+  344   1        for(i = GRAY_W / 2; i <= GRAY_W - 2 ; i ++)
+  345   1        {
+  346   2          if(Image1[i][RH] == WHITE && Image1[i + 1][RH] == BLACK)
+  347   2          {
+  348   3            RW = i;
+  349   3            Fake_Edge = 0; 
+  350   3            break ;
+  351   3          }
+  352   2          else if(i == GRAY_W - 2)
+  353   2          {
+  354   3            Rfound = 0;
+  355   3            Fake_Edge = 1;      //底边没找到：本行不写值，但继续向上搜索，由丢线重搜找回�
+             -�实边界
+  356   3          }
+  357   2        }
+  358   1        
+  359   1        LastX_R = 0;
+  360   1        LastY_R = 0;
+  361   1        step1 = 0;
+  362   1        
+  363   1        while(RH >= 0 && NOFind_DiffFlagR == 0 && step1 < 400)
+  364   1        {
+  365   2      
+  366   2          tft180_draw_point(RW, RH, RGB565_CYAN);  //青色
+  367   2          if(Fake_Edge != 1)
+  368   2          {
+  369   3            R_Edge[RH] = RW;
+  370   3          }
+  371   2          step1++;
+  372   2          Rfound = 0;   //初始时，清零，保证逻辑可以正常进入
+  373   2      
+  374   2          //爬到图像右边界且上方是白色,贴着图像边缘直接向上延伸
+  375   2          if(RW >= GRAY_W - 3 && RH >= 3 && (Image1[RW][RH - 1] == WHITE || Image1[RW][RH - 3] == WHITE))
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 7   
+
+  376   2          {
+  377   3            LastX_R = RW;
+  378   3            LastY_R = RH;
+  379   3            RH = RH - 1;
+  380   3            Fake_Edge = 1;
+  381   3            Rfound = 1;
+  382   3          }
+  383   2      
+  384   2          //顺时针搜索
+  385   2          if(Rfound == 0)
+  386   2          {
+  387   3            for(i = 0; i < 8; i++)
+  388   3            {
+  389   4              nx = RW + RX_Plus[i];
+  390   4              ny = RH + RY_Plus[i];
+  391   4      
+  392   4              //越界检查
+  393   4              if(nx < 1 || nx >= GRAY_W - 1 || ny < 0 || ny >= GRAY_H)
+  394   4              {
+  395   5                continue;
+  396   5              }
+  397   4              //不返回上一个点，防止两个点之间来回震荡
+  398   4              if(nx == LastX_R && ny == LastY_R)
+  399   4              {
+  400   5                continue;
+  401   5              }
+  402   4      
+  403   4              if((Image1[nx][ny] == WHITE && Image1[nx + 1][ny] == BLACK)
+  404   4                 ||( ny < GRAY_H - 1 && (Image1[nx][ny] == WHITE  &&  Image1[nx][ny + 1] == BLACK) ) )
+  405   4              {
+  406   5                LastX_R  = RW;
+  407   5                LastY_R  = RH;
+  408   5                RW = nx;
+  409   5                RH = ny;
+  410   5                R_Edge[RH] = RW;
+  411   5                Fake_Edge = 0;
+  412   5                Rfound = 1;
+  413   5                break ;
+  414   5              }
+  415   4            }
+  416   3          }
+  417   2      
+  418   2          //八邻域找不到，那么在当前点的左右两边分别向外找3个像素
+  419   2          if(Rfound == 0 && RH > 0)
+  420   2          {
+  421   3            y = RH;
+  422   3            for(r = 2; r <= 3 && !Rfound; r++)
+  423   3            {
+  424   4              x_right = RW + r;
+  425   4              x_left  = RW - r;
+  426   4      
+  427   4              if(x_right >= 2 && x_right < GRAY_W - 1 &&
+  428   4                 Image1[x_right][y] == WHITE && Image1[x_right + 1][y] == BLACK)
+  429   4              {
+  430   5                LastX_R = RW;
+  431   5                LastY_R = RH;
+  432   5                RW = x_right;
+  433   5                RH = y;
+  434   5                R_Edge[RH] = RW;
+  435   5                Fake_Edge = 0;
+  436   5                Rfound = 1;
+  437   5                break ;
+  438   5              }
+  439   4              if(x_left >= 2 && x_left < GRAY_W - 1 &&
+  440   4                 Image1[x_left][y] == WHITE && Image1[x_left + 1][y] == BLACK)
+  441   4              {
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 8   
+
+  442   5                LastX_R = RW;
+  443   5                LastY_R = RH;
+  444   5                RW = x_left;
+  445   5                RH = y;
+  446   5                R_Edge[RH] = RW;
+  447   5                Fake_Edge = 0;
+  448   5                Rfound = 1;
+  449   5                break ;
+  450   5              }
+  451   4            }
+  452   3          }
+  453   2      
+  454   2          if(Rfound == 0 )
+  455   2          {
+  456   3            NOFind_DiffFlagR = 1;   //丢线
+  457   3            re_found = 0;       //重新找到线的标志位
+  458   3            for(i = RH - 1 ; i >= 0 && re_found == 0; i--)
+  459   3            {
+  460   4              for(j = GRAY_W / 2 ; j <= GRAY_W - 2 ; j++)
+  461   4              {
+  462   5                if ((Image1[j][i] == WHITE && Image1[j + 1 ][i] == BLACK)
+  463   5                  || (Image1[j][i] == WHITE && Image1[j][i - 1] == BLACK))
+  464   5                {
+  465   6                  RW = j;
+  466   6                  RH = i;
+  467   6                  R_Edge[RH] = RW;
+  468   6                  Fake_Edge = 0;
+  469   6                  NOFind_DiffFlagR = 0 ;
+  470   6                  re_found = 1 ;  //重新找到线
+  471   6                  break ;
+  472   6                }
+  473   5              }
+  474   4            }
+  475   3          }
+  476   2           }
+  477   1      
+  478   1        //重置
+  479   1        RH = GRAY_H - 1;
+  480   1      }
+  481          
+  482          
+  483          void Find_KeyPoint(int16 L_Edge[GRAY_H] , int16 R_Edge[GRAY_H])
+  484          {
+  485   1        /*===============图像处理====================*/
+  486   1        //1.首先逆透视再用向量法
+  487   1        //2.传统一点，直接处理
+  488   1      
+  489   1        /*
+  490   1         1方法
+  491   1        */
+  492   1      
+  493   1        /*2方法*/
+  494   1        //定义十字路口处，靠近摄像头的边的直角为A点，右侧为B点 ，
+  495   1        
+  496   1        uint8  Found_A = 0;     //A点找到标志
+  497   1        uint8  Found_B = 0;     //B点找到标志
+  498   1        uint16 CY = 0;        //从A向上找到的黑白交界处的黑点
+  499   1        uint16 DY = 0;        //类似
+  500   1        int16  i;
+  501   1        int16  j;
+  502   1        uint16 Dif_AB = 0;      //A,B两点的行差
+  503   1      
+  504   1      
+  505   1        AB_Exist = 0;
+  506   1        OnlyA_or_B = 0;
+  507   1        Length_A = 0;     //每帧清零，避免上一帧陈旧值导致 A_Y-i 无符号下溢越界
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 9   
+
+  508   1        Length_B = 0;
+  509   1        
+  510   1      
+  511   1        //找A点
+  512   1        if(L_Edge[Key_Row] >= 2 && L_Edge[Key_Row] <= GRAY_W - 3 )    
+  513   1        {
+  514   2          AX = L_Edge[Key_Row];   //初始值设置为底边的边界点，并以此向上延伸
+  515   2      
+  516   2          //找A点
+  517   2          for(i = Key_Row; i > 2; i--)
+  518   2          {
+  519   3            for(j = AX; j < GRAY_W - 2; j ++)
+  520   3            {
+  521   4              if(Image1[j][i] == WHITE && Image1[j - 2][i] == BLACK)
+  522   4              {
+  523   5                AX = j - 2;   //找黑点
+  524   5                break;
+  525   5              }
+  526   4            }
+  527   3            if(Image1[AX][i] == BLACK && Image1[AX][i - 2] == WHITE && Image1[AX][i - 3] == WHITE)//当前黑点�
+             -�上方连续2行白（与右侧对称，抗噪）
+  528   3            {
+  529   4              AY = i;
+  530   4              Found_A = 1;             //找到A点
+  531   4              break;
+  532   4            }
+  533   3          }
+  534   2        
+  535   2          //找到A点才显示并计算左探针长度，未找到则跳过
+  536   2          if(Found_A == 1)
+  537   2          {
+  538   3            for(i = 1; i <= 3; i ++)
+  539   3            {
+  540   4              for(j = 1; j <= 3; j ++)
+  541   4              {
+  542   5                tft180_draw_point(AX + j , AY - i, RGB565_PINK);  //显示A点
+  543   5              }
+  544   4            }
+  545   3            
+  546   3            //从A点向上找边界
+  547   3            for(i = AY - 1; i > 2; i -- )
+  548   3            {
+  549   4              if(Image1[AX][i] == WHITE && Image1[AX][i - 2] == BLACK)
+  550   4              {
+  551   5                CY = i - 1;
+  552   5                Length_A = AY - CY;
+  553   5                break;
+  554   5              }
+  555   4            }
+  556   3          }
+  557   2      
+  558   2        }
+  559   1      
+  560   1      
+  561   1      
+  562   1        //找B点
+  563   1        if(R_Edge[Key_Row] >= 1 && R_Edge[Key_Row] <= GRAY_W - 3)     
+  564   1        {
+  565   2          BX = R_Edge[Key_Row];
+  566   2          //找B点
+  567   2          for(i = Key_Row; i > 2; i--)
+  568   2          {
+  569   3            for(j = BX; j >= 1; j--)
+  570   3            {
+  571   4              if(Image1[j][i] == WHITE && Image1[j + 2][i] == BLACK)
+  572   4              {
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 10  
+
+  573   5                BX = j + 2;
+  574   5                break;
+  575   5              }
+  576   4            }
+  577   3            if(Image1[BX][i] == BLACK && (Image1[BX][i - 2] == WHITE && Image1[BX][i - 3] == WHITE))
+  578   3            {
+  579   4              BY = i;
+  580   4              Found_B = 1;           //找到B点
+  581   4              break;
+  582   4            }
+  583   3          }
+  584   2      
+  585   2          //找到B点才显示并计算右探针长度
+  586   2          if(Found_B == 1)
+  587   2          {
+  588   3            for(i = 1; i <= 3; i ++)
+  589   3            {
+  590   4              for(j = -2; j <= 0; j ++)
+  591   4              {
+  592   5                tft180_draw_point(BX + j, BY - i, RGB565_BROWN);            //显示B点
+  593   5              }
+  594   4            }
+  595   3            
+  596   3            for(i = BY - 1; i > 2; i -- )
+  597   3            {
+  598   4              if(Image1[BX][i] == WHITE && Image1[BX][i - 1] == BLACK && Image1[BX][i - 2] == BLACK)
+  599   4              {
+  600   5                DY = i - 1;
+  601   5                Length_B = BY - DY;
+  602   5                break;
+  603   5              }
+  604   4            }
+  605   3          }
+  606   2        }
+  607   1      
+  608   1        // 假如两侧”探针”的长度在最短长度之上,并且，AB两点差不多在同一水平线�
+             -�判定为十字路口
+  609   1        if(AY < BY)//A点靠上
+  610   1        {
+  611   2          Dif_AB = BY - AY;
+  612   2        }
+  613   1        if(AY > BY)//A点靠下
+  614   1        {
+  615   2          Dif_AB = AY - BY;
+  616   2        }
+  617   1      
+  618   1      
+  619   1        if(Found_A && Found_B && Length_A >= Min_Length && Length_B >= Min_Length && Dif_AB < Max_DifAB)  //确�
+             -��为十字路口
+  620   1        {
+  621   2          AB_Exist = 1;
+  622   2        }
+  623   1        else
+  624   1        {
+  625   2          AB_Exist = 0;
+  626   2        }
+  627   1      
+  628   1      
+  629   1        if(Found_A == 1 && Length_A >= Min_Length && AB_Exist == 0)          //仅左侧合格
+  630   1        {
+  631   2          OnlyA_or_B = 1;                         
+  632   2        }
+  633   1        else if (Found_B == 1 && Length_B >= Min_Length && AB_Exist == 0)    //仅右侧合格
+  634   1        {
+  635   2          OnlyA_or_B = 2; 
+  636   2        }
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 11  
+
+  637   1      
+  638   1      }
+  639          
+  640          void Find_MidLine(void)
+  641          {
+  642   1        int16 i = 0;
+  643   1        //找中线
+  644   1        memset(Mid_Line , -1 , sizeof(Mid_Line));           //初始化为-1
+  645   1        
+  646   1        Cross_Statemachine(AX, AY, BX, BY, AB_Exist,OnlyA_or_B);
+  647   1      
+  648   1        for(i = GRAY_H - 1 ; i >= 0 ; i --)
+  649   1        {
+  650   2          if(L_Edge[i] >= 0 && R_Edge[i] > 0 )            //假如，左右两边都可以找到边界（左边界贴�
+             -�图像第0列也是合法的）
+  651   2          {
+  652   3            Mid_Line[i] = (L_Edge[i] + R_Edge[i]) >> 1;
+  653   3          }
+  654   2          else if(RE_State == Cross_State_OnlyA && L_Edge[i] >= 0 && i >= 30 && i <= 49)
+  655   2          {
+  656   3            Mid_Line[i] = L_Edge[i] + Half_Width[i - 30];     //OnlyA：左侧为人为补出的边界，右侧丢�
+             -�时用半宽兜底
+  657   3            // Mid_Line[i] = (L_Edge[i] + GRAY_W) >> 1;         //OnlyA：左侧为人为补出的边界，右侧丢�
+             -�时用半宽兜底
+  658   3            if(Mid_Line[i] >= GRAY_H)
+  659   3            {
+  660   4              Mid_Line[i] = -1;                                   //超出边界，失效
+  661   4            }
+  662   3          }
+  663   2          else if(RE_State == Cross_State_OnlyB && R_Edge[i] >= 0 && i >= 30 && i <= 49)
+  664   2          {
+  665   3            Mid_Line[i] = R_Edge[i] - Half_Width[i - 30];
+  666   3            // Mid_Line[i] = R_Edge[i] >> 1;
+  667   3            if(Mid_Line[i] <= 0)
+  668   3            {
+  669   4              Mid_Line[i] = -1;                                   //超出边界，失效
+  670   4            }
+  671   3          }
+  672   2          else if(R_Edge[i] < 0 && L_Edge[i] >= 0)          //右侧丢线且左侧有效（含左边界贴第0列）
+  673   2          {
+  674   3            if(i >= GRAY_H - 10)
+  675   3            { 
+  676   4              Mid_Line[i] = (L_Edge[i] + GRAY_W) >> 1; 
+  677   4            }     
+  678   3          }
+  679   2          else if(L_Edge[i] <= 0 && R_Edge[i] > 0)          //左侧丢线且右侧有效
+  680   2          {
+  681   3            if(i >= GRAY_H - 10)
+  682   3            {
+  683   4              Mid_Line[i] = R_Edge[i] >> 1;
+  684   4            }
+  685   3          }
+  686   2          
+  687   2          if(Mid_Line[i] >= 0 )                   //左右都丢线时为-1，不画，防止画到界外
+  688   2          {
+  689   3            tft180_draw_point(Mid_Line[i], i, 0xF800 );       // 坐标为下采样后的坐标，可直接显示
+  690   3          }
+  691   2        }
+  692   1      }
+  693            
+  694          int16 Find_Error(int16 Mid_Line[], int16 L_Edge[], int16 R_Edge[])
+  695          {
+  696   1        uint8 Lose_LineTimes  = 0 ;                       //丢线次数
+  697   1        uint8 Forward_LookingLine = 0;                    //前瞻行，指定前进方向，因为摄像头算�
+             -��有延迟，计算出结果时，小车已经前进一段距离
+  698   1        int32 ErrorWeighted_Sum = 0;                      //偏差加权和
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 12  
+
+  699   1        int32 Weighted_Sum = 0;                 //权重和
+  700   1        int16 Top_threshold = 0;              //前瞻区域顶部两行偏差
+  701   1        int16 Lower_threshold = 0;              //前瞻区域底部两行偏差
+  702   1        int16 i;
+  703   1        End_Line = 0;                         //截至行
+  704   1      
+  705   1        RL_Result = 0;
+  706   1        Curve_deviation_threshold = 0;        //判断区域上下两部分权重偏差（语句须在声明之后�
+             -��C251 C89 规则）
+  707   1        for(i = (GRAY_H - 2); i > 0; i --)        //从底部开始找          
+  708   1        {
+  709   2          if(Mid_Line[i] < 0)
+  710   2          {
+  711   3            Lose_LineTimes ++;
+  712   3            if(Lose_LineTimes >= Max_LoseLineTimes)      //计算丢线次数
+  713   3            {
+  714   4              Lose_LineTimes = 0;
+  715   4              End_Line = GRAY_H - 10;             
+  716   4              break;
+  717   4            }
+  718   3          }
+  719   2          else                                          //Mid_Line[i] >= 0，有效行：清零计数并检查赛
+             -道宽度
+  720   2          {
+  721   3            Lose_LineTimes = 0;
+  722   3            if(L_Edge[i] > 0 && R_Edge[i] > 0 && (R_Edge[i] - L_Edge[i]) < Min_RoadWeidth )     //判定赛道宽�
+             -��是否比最小值大
+  723   3            {
+  724   4              End_Line = i;
+  725   4              RL_Result = (R_Edge[i] - L_Edge[i]);    //导出给主循环显示（本函数k在3ms中断里，不能
+             -直接画屏）
+  726   4              break;
+  727   4            }
+  728   3          }
+  729   2        }
+  730   1      
+  731   1        if(End_Line != 0)
+  732   1        {
+  733   2          Forward_LookingLine = End_Line + 3;   //只算数值，画线挪到主循环（本函数在3ms中断里�
+             -��，软SPI不可重入）
+  734   2        }
+  735   1        else
+  736   1        {
+  737   2          Forward_LookingLine = 38;                //如果End_line没找到，默认值
+  738   2        }
+  739   1      
+  740   1        if(Forward_LookingLine > Forward_LookingLine_Min )
+  741   1        {
+  742   2          Forward_LookingLine = Forward_LookingLine_Min;
+  743   2        }
+  744   1        else if (Forward_LookingLine < Forward_LookingLine_Max)
+  745   1        {
+  746   2          Forward_LookingLine = Forward_LookingLine_Max;
+  747   2        }
+  748   1        Forward_LookingLine_Out = Forward_LookingLine;  //导出给主循环画前瞻线
+  749   1        
+  750   1        for(i = -4; i <= 4; i ++ )    //从截至行往下开始
+  751   1        {
+  752   2          if(Mid_Line[(Forward_LookingLine + i)] >= 0)
+  753   2            {
+  754   3              ErrorWeighted_Sum += ( (Mid_Line[(Forward_LookingLine + i)] - Frame_Mind) * Weight[(i + 4)]);
+  755   3              Weighted_Sum +=  Weight[(i + 4)];
+  756   3              if((Forward_LookingLine + i ) < (Forward_LookingLine - 2))
+  757   3              {
+  758   4                Top_threshold += (Mid_Line[(Forward_LookingLine + i)] - Frame_Mind);
+  759   4              }
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 13  
+
+  760   3              else if((Forward_LookingLine + i) > (Forward_LookingLine +  2))
+  761   3              {
+  762   4                Lower_threshold += (Mid_Line[(Forward_LookingLine + i)] - Frame_Mind);
+  763   4              }
+  764   3            }
+  765   2          else
+  766   2          {
+  767   3            continue;
+  768   3          }
+  769   2        }
+  770   1        if(Top_threshold != 0 && Lower_threshold != 0)
+  771   1        {
+  772   2          Curve_deviation_threshold = Top_threshold - Lower_threshold;
+  773   2        }
+  774   1      
+  775   1        if(Weighted_Sum > 0)      
+  776   1        {
+  777   2          Error_Out = (int16)(((ErrorWeighted_Sum * 5) / Weighted_Sum) * 2);    
+  778   2        }
+  779   1        return Error_Out;
+  780   1      }
+  781          
+  782          /*
+  783          说明
+  784          可优化的点 1.在丢线之后重新寻找的逻辑里面，可以不用从中线开始找，从最后
+             -一个找到点的位置，同时向左右两边找即可
+  785          BUG1.左侧或者右侧在其中一边丢线的时候，进入补中线的条件缺少等于0，此时，
+             -由于八邻域仍在运行见下方
+  786              if(LW <= 2 && LH >= 3 && (Image1[LW][LH - 1] == WHITE || Image1[LW][LH - 3] == WHITE))//检测上方是
+             -否为白色像素
+  787              {
+  788                LastX_L = LW;
+  789                LastY_L = LH;
+  790                LH = LH - 1;
+  791                Lfound = 1;
+  792                L_Edge[LH] = LW ;
+  793              }
+  794          可见L_Edge的值变成了0，故无法进入补中线的逻辑
+  795          BUG2.在边缘向上的途中，会把左右边界的值设为0与187，最终导致得到错误中线
+  796          修改.在八邻域判断横向部分改为仅判断十字的下边缘，假如连上边缘也一起判�
+             -�，那么在一边丢线的时候，丢线一侧的爬线会不可避免的爬到另一边，目前没有好的解决�
+             -�法。
+  797          */
+*** WARNING C183 IN LINE 498 OF ..\..\Harderware\Gray.c: dead assignment eliminated
+*** WARNING C183 IN LINE 499 OF ..\..\Harderware\Gray.c: dead assignment eliminated
+*** WARNING C183 IN LINE 714 OF ..\..\Harderware\Gray.c: dead assignment eliminated
+
+
+Module Information          Static   Overlayable
+------------------------------------------------
+  code size            =    ------     ------
+  ecode size           =      4837     ------
+  data size            =    ------     ------
+  idata size           =    ------     ------
+  pdata size           =    ------     ------
+  xdata size           =      6598         65
+  xdata-const size     =    ------     ------
+  edata size           =    ------     ------
+  bit size             =    ------     ------
+  ebit size            =    ------     ------
+  bitaddressable size  =    ------     ------
+  ebitaddressable size =    ------     ------
+  far data size        =    ------     ------
+  huge data size       =    ------     ------
+  const size           =    ------     ------
+  hconst size          =      6424     ------
+End of Module Information.
+
+C251 COMPILER V5.60.0,  Gray                                                               22/11/26  17:26:53  PAGE 14  
+
+
+C251 COMPILATION COMPLETE.  3 WARNING(S),  0 ERROR(S)

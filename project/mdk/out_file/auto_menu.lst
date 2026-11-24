@@ -1,0 +1,15 @@
+C251 COMPILER V5.60.0,  auto_menu                                                          26/10/26  23:29:33  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE auto_menu
+OBJECT MODULE PLACED IN .\out_file\auto_menu.obj
+COMPILER INVOKED BY: E:\Keil5\C251\BIN\C251.EXE ..\code\auto_menu.c LARGE FLOAT64 ROM(HUGE) WARNINGLEVEL(3) OPTIMIZE(SIZ
+                    -E) BROWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_dr
+                    -iver;..\user;..\code;..\..\libraries\zf_components\stc32g_usb_lib;..\..\libraries\zf_components\seekfree_assistant) DEBU
+                    -G PRINT(.\out_file\auto_menu.lst) TABS(2) OBJECT(.\out_file\auto_menu.obj) 
+
+stmt  level    source
+
+*** ERROR C318 OF ..\code\auto_menu.c: can't open file '..\code\auto_menu.c'
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  1 ERROR(S)

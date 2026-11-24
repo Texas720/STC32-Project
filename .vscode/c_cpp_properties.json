@@ -1,0 +1,50 @@
+{
+    "configurations": [
+        {
+            "name": "seekfree_stc32g144k246",
+            "includePath": [
+                "${workspaceFolder}/libraries/zf_common",
+                "${workspaceFolder}/libraries/zf_components",
+                "${workspaceFolder}/libraries/zf_device",
+                "${workspaceFolder}/libraries/zf_driver",
+                "${workspaceFolder}/libraries/zf_components/stc32g_usb_lib",
+                "${workspaceFolder}/libraries/zf_components/seekfree_assistant",
+                "${workspaceFolder}/libraries/doc",
+                "${workspaceFolder}/project/user",
+                "${workspaceFolder}/Harderware",
+                "E:/Keil5/C251/INC",
+                "E:/Keil5/C251/INC/STC"
+            ],
+            "defines": [
+                "__C251__",
+                "__VSCODE_C251__",
+                "reentrant=",
+                "compact=",
+                "small=",
+                "large=",
+                "data=",
+                "idata=",
+                "pdata=",
+                "bdata=",
+                "xdata=",
+                "far=",
+                "near=",
+                "huge=",
+                "code=",
+                "bit=char",
+                "sbit=char",
+                "sfr=char",
+                "sfr16=int",
+                "sfr32=int",
+                "interrupt=",
+                "using=",
+                "_at_=",
+                "_priority_=",
+                "_task_="
+            ],
+            "cStandard": "c99",
+            "intelliSenseMode": "${default}"
+        }
+    ],
+    "version": 4
+}

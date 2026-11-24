@@ -1,0 +1,15 @@
+C251 COMPILER V5.60.0,  WIFI                                                               26/10/26  23:29:33  PAGE 1   
+
+
+C251 COMPILER V5.60.0, COMPILATION OF MODULE WIFI
+OBJECT MODULE PLACED IN .\out_file\WIFI.obj
+COMPILER INVOKED BY: E:\Keil5\C251\BIN\C251.EXE ..\code\WIFI.c LARGE FLOAT64 ROM(HUGE) WARNINGLEVEL(3) OPTIMIZE(SIZE) BR
+                    -OWSE INCDIR(..\..\libraries\zf_common;..\..\libraries\zf_components;..\..\libraries\zf_device;..\..\libraries\zf_driver;
+                    -..\user;..\code;..\..\libraries\zf_components\stc32g_usb_lib;..\..\libraries\zf_components\seekfree_assistant) DEBUG PRI
+                    -NT(.\out_file\WIFI.lst) TABS(2) OBJECT(.\out_file\WIFI.obj) 
+
+stmt  level    source
+
+*** ERROR C318 OF ..\code\WIFI.c: can't open file '..\code\WIFI.c'
+
+C251 COMPILATION COMPLETE.  0 WARNING(S),  1 ERROR(S)
